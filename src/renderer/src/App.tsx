@@ -14,7 +14,7 @@ function App(): React.JSX.Element {
   return (
     <main className="app">
       <h1>Gamekeeper</h1>
-      <p className="subtitle">Этап 1: каркас приложения</p>
+      <p className="subtitle">Этап 2: база данных</p>
 
       {/* Пока info === null, показываем заглушку. */}
       {info === null ? (
@@ -23,6 +23,10 @@ function App(): React.JSX.Element {
         <dl className="info">
           <dt>Версия</dt>
           <dd>{info.version}</dd>
+          <dt>Лимит каток</dt>
+          <dd>{info.matchLimit}</dd>
+          <dt>База данных</dt>
+          <dd>{info.databasePath}</dd>
           <dt>Автозапуск</dt>
           <dd>
             {info.autostartEnabled

@@ -50,7 +50,7 @@ src/
 ## Этапы
 
 1. ✅ Каркас electron-vite + React + TS, трей, сворачивание в трей, автозапуск, single-instance lock.
-2. БД: Drizzle + better-sqlite3, схема (settings, matches, pending_changes), миграции.
+2. ✅ БД: Drizzle + better-sqlite3, схема (settings, matches, pending_changes), миграции.
 3. CS2: поиск Steam/CS2, установка GSI cfg, GSI-сервер, match-counter.
 4. Rules-engine + enforcer: лимит, блокировка, отложенное закрытие, сброс в 05:00.
 5. Защита: пароль (хеш), отложенные ослабляющие изменения с задержкой 10 мин.
@@ -62,3 +62,10 @@ src/
 - `npm run dev` — запуск в режиме разработки
 - `npm run typecheck` — проверка типов
 - `npm run build:win` — сборка установщика
+- `npm run db:generate` — сгенерировать SQL-миграцию после изменения `src/main/core/db/schema.ts`
+
+## База данных
+
+- Файл: `%APPDATA%\gamekeeper\gamekeeper.db`. Миграции применяются автоматически при старте (`openDatabase`).
+- Миграции лежат в `drizzle/` и коммитятся; в сборку попадают через `extraResources`. Уже закоммиченные миграции не редактировать — только генерировать новые.
+- `better-sqlite3` — нативный модуль, собран под Electron (`electron-builder install-app-deps` в postinstall). Обычный Node его не загрузит; для скриптов использовать `ELECTRON_RUN_AS_NODE=1 electron script.js`.

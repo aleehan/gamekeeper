@@ -14,6 +14,8 @@ export interface AppInfo {
   version: string
   autostartEnabled: boolean
   isPackaged: boolean
+  databasePath: string
+  matchLimit: number
 }
 
 // API, который preload кладёт в window.gamekeeper.
