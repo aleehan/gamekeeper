@@ -2,6 +2,7 @@ import { Notification } from 'electron'
 import icon from '../../resources/icon.png?asset'
 import type { KillReason } from './core/enforcer'
 import type { RulesState } from './core/rules-engine'
+import type { PendingChange } from './core/db'
 
 function show(title: string, body: string): void {
   // На некоторых системах уведомления отключены — тогда просто молчим.
@@ -36,6 +37,24 @@ const KILL_MESSAGES: Record<KillReason, string> = {
   'limit-reached': 'Лимит каток на сегодня исчерпан.',
   'blocked-launch': 'Сегодня играть уже нельзя.',
   'new-match-after-limit': 'Новый матч после исчерпания лимита не разрешён.'
+}
+
+/** Отложенное ослабление вступило в силу. */
+export function notifyChangeApplied(change: PendingChange): void {
+  switch (change.kind) {
+    case 'raise_limit':
+      show('Лимит увеличен', `Теперь можно ${change.value} каток в день.`)
+      break
+    case 'raise_close_delay':
+      show('Задержка закрытия увеличена', `CS2 закроется через ${change.value} с после лимита.`)
+      break
+    case 'unlock':
+      show('Блокировка снята', 'Играть можно до 05:00.')
+      break
+    case 'quit':
+      show('Gamekeeper закрывается', 'Ограничения не действуют, пока приложение не запущено.')
+      break
+  }
 }
 
 export function notifyKilled(reason: KillReason, rules: RulesState): void {

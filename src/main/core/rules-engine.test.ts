@@ -35,6 +35,19 @@ describe('evaluateRules', () => {
     expect(evaluateRules({ ...input, now: later }).status).toBe('blocked')
   })
 
+  it('снятая блокировка разрешает играть сверх лимита до unlockedUntil', () => {
+    const input = {
+      limit: 1,
+      closeDelayMs: 0,
+      matchTimesToday: [minutesAgo(30), minutesAgo(5)],
+      unlockedUntil: new Date(now.getTime() + 60 * 60_000)
+    }
+    expect(evaluateRules({ ...input, now }).status).toBe('allowed')
+    const afterUnlock = new Date(now.getTime() + 61 * 60_000)
+    expect(evaluateRules({ ...input, now: afterUnlock }).status).toBe('blocked')
+    expect(evaluateRules({ ...input, now: afterUnlock }).unlockedUntil).toBeNull()
+  })
+
   it('задержка считается от катки, исчерпавшей лимит, а не от последней', () => {
     // Лимит понизили с 3 до 1, когда сыграно уже 2: блокировка сразу, без задержки.
     const state = evaluateRules({

@@ -10,7 +10,12 @@ import { Cs2Integration } from './core/games/cs2/integration'
 import { Enforcer } from './core/enforcer'
 import { WindowsProcessController } from './core/process-controller'
 import { evaluateToday } from './core/today'
-import { notifyKilled, notifyMatchRecorded } from './notifications'
+import { notifyChangeApplied, notifyKilled, notifyMatchRecorded } from './notifications'
+import { ProtectionService } from './core/protection'
+import { registerProtectionIpc } from './ipc-protection'
+
+/** Как часто проверять, не пора ли применить отложенные изменения. */
+const APPLY_DUE_INTERVAL_MS = 5000
 
 // Ссылки держим на уровне модуля: если Tray окажется только в локальной
 // переменной функции, сборщик мусора его удалит и иконка исчезнет из трея.
@@ -86,7 +91,26 @@ function bootstrap(): void {
   })
   enforcer.start()
 
+  // ── Защита ──────────────────────────────────────────────────────────
+  const protection = new ProtectionService({ db })
+  protection.discardStaleQuitRequests()
+
+  const applyDueChanges = (): void => {
+    const applied = protection.applyDue()
+    for (const change of applied) {
+      console.log(`[protection] применено: ${change.kind} ${change.value ?? ''}`)
+      notifyChangeApplied(change)
+    }
+    // Лимит/блокировка могли измениться — пусть enforcer пересчитает сразу.
+    if (applied.length > 0) void enforcer?.tick()
+    // `some` — есть ли хотя бы один элемент, подходящий под условие.
+    if (applied.some((c) => c.kind === 'quit')) app.quit()
+  }
+  applyDueChanges()
+  setInterval(applyDueChanges, APPLY_DUE_INTERVAL_MS)
+
   registerIpc(db, cs2)
+  registerProtectionIpc(db, protection, () => void enforcer?.tick())
 
   // При автозапуске с флагом --hidden окно создаём, но не показываем.
   mainWindow = createMainWindow({ showOnReady: !wasLaunchedHidden() })
@@ -95,7 +119,10 @@ function bootstrap(): void {
     onShow: () => {
       if (mainWindow) showWindow(mainWindow)
     },
-    onQuit: () => app.quit()
+    // Выйти напрямую нельзя: показываем окно, где выход запрашивается по паролю.
+    onQuit: () => {
+      if (mainWindow) showWindow(mainWindow)
+    }
   })
 }
 
@@ -124,7 +151,8 @@ function registerIpc(db: DatabaseHandle['db'], cs2: Cs2Integration): void {
       remaining: rules.remaining,
       // `?.` + `??`: если closeAt null — получим null, иначе число миллисекунд.
       closeAt: rules.closeAt?.getTime() ?? null,
-      nextResetAt: rules.nextResetAt.getTime()
+      nextResetAt: rules.nextResetAt.getTime(),
+      unlockedUntil: rules.unlockedUntil?.getTime() ?? null
     }
   })
 

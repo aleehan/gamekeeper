@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { AppInfo, Cs2Status, MatchRecord, TodayStatus } from '../../shared/ipc'
+import { ProtectionPanel } from './components/ProtectionPanel'
 
 // Record<K, V> — объект, где ключи типа K, а значения типа V.
 // Здесь TS проверит, что для КАЖДОГО варианта config есть подпись: забудешь один — ошибка.
@@ -65,7 +66,7 @@ function App(): React.JSX.Element {
   return (
     <main className="app">
       <h1>Gamekeeper</h1>
-      <p className="subtitle">Этап 4: лимит и блокировка</p>
+      <p className="subtitle">Этап 5: защита</p>
 
       <h2>Сегодня</h2>
       {today === null ? (
@@ -84,8 +85,17 @@ function App(): React.JSX.Element {
           </dd>
           <dt>Сброс счётчика</dt>
           <dd>{formatTime(today.nextResetAt)}</dd>
+          {today.unlockedUntil !== null && (
+            <>
+              <dt>Блокировка снята</dt>
+              <dd>до {formatTime(today.unlockedUntil)}</dd>
+            </>
+          )}
         </dl>
       )}
+
+      <h2>Защита</h2>
+      <ProtectionPanel />
 
       <h2>CS2</h2>
       {cs2 === null ? (

@@ -19,7 +19,9 @@ export const settings = sqliteTable(
     // Хеш пароля (этап 5). null — пароль ещё не задан.
     passwordHash: text('password_hash'),
     // Секретный токен, который CS2 присылает в каждом GSI-запросе (этап 3).
-    gsiToken: text('gsi_token')
+    gsiToken: text('gsi_token'),
+    // До какого момента блокировка снята (после подтверждённого «Снять блокировку»).
+    unlockedUntil: integer('unlocked_until', { mode: 'timestamp_ms' })
   },
   // Третий аргумент — ограничения таблицы. `table` — уже описанные колонки.
   (table) => [

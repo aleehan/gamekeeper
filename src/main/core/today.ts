@@ -9,6 +9,7 @@ export function evaluateToday(db: Db, now: Date = new Date()): RulesState {
     now,
     limit: settings.matchLimit,
     closeDelayMs: settings.closeDelaySeconds * 1000,
-    matchTimesToday: listMatchTimesSince(db, getGameDayStart(now))
+    matchTimesToday: listMatchTimesSince(db, getGameDayStart(now)),
+    unlockedUntil: settings.unlockedUntil
   })
 }

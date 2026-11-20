@@ -11,7 +11,19 @@ const api = {
   getAppInfo: () => ipcRenderer.invoke(IpcChannels.getAppInfo),
   getCs2Status: () => ipcRenderer.invoke(IpcChannels.getCs2Status),
   getRecentMatches: (limit?: number) => ipcRenderer.invoke(IpcChannels.getRecentMatches, limit),
-  getTodayStatus: () => ipcRenderer.invoke(IpcChannels.getTodayStatus)
+  getTodayStatus: () => ipcRenderer.invoke(IpcChannels.getTodayStatus),
+  getProtectionState: () => ipcRenderer.invoke(IpcChannels.getProtectionState),
+  setInitialPassword: (password: string) =>
+    ipcRenderer.invoke(IpcChannels.setInitialPassword, password),
+  changePassword: (current: string, next: string) =>
+    ipcRenderer.invoke(IpcChannels.changePassword, current, next),
+  setMatchLimit: (value: number, password?: string) =>
+    ipcRenderer.invoke(IpcChannels.setMatchLimit, value, password),
+  setCloseDelay: (seconds: number, password?: string) =>
+    ipcRenderer.invoke(IpcChannels.setCloseDelay, seconds, password),
+  requestUnlock: (password: string) => ipcRenderer.invoke(IpcChannels.requestUnlock, password),
+  requestQuit: (password: string) => ipcRenderer.invoke(IpcChannels.requestQuit, password),
+  cancelPending: (id: number) => ipcRenderer.invoke(IpcChannels.cancelPending, id)
 } satisfies GamekeeperApi
 
 contextBridge.exposeInMainWorld('gamekeeper', api)

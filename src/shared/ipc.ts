@@ -1,3 +1,5 @@
+import type { ActionResult } from './protection'
+
 // Общий контракт между main, preload и renderer.
 // Этот файл не импортирует ничего из Electron — только типы и константы,
 // поэтому его безопасно подключать в любом процессе.
@@ -9,8 +11,31 @@ export const IpcChannels = {
   getAppInfo: 'app:get-info',
   getCs2Status: 'cs2:get-status',
   getRecentMatches: 'matches:get-recent',
-  getTodayStatus: 'rules:get-today'
+  getTodayStatus: 'rules:get-today',
+  getProtectionState: 'protection:get-state',
+  setInitialPassword: 'protection:set-initial-password',
+  changePassword: 'protection:change-password',
+  setMatchLimit: 'settings:set-match-limit',
+  setCloseDelay: 'settings:set-close-delay',
+  requestUnlock: 'protection:request-unlock',
+  requestQuit: 'protection:request-quit',
+  cancelPending: 'protection:cancel'
 } as const
+
+/** Ожидающее ослабление в том виде, в каком его показывает интерфейс. */
+export interface PendingChangeInfo {
+  id: number
+  kind: 'raise_limit' | 'raise_close_delay' | 'unlock' | 'quit'
+  value: number | null
+  applyAt: number
+}
+
+export interface ProtectionState {
+  hasPassword: boolean
+  matchLimit: number
+  closeDelaySeconds: number
+  pending: PendingChangeInfo[]
+}
 
 /** Состояние лимита на сегодня (даты — в мс, чтобы было проще передавать и форматировать). */
 export interface TodayStatus {
@@ -20,6 +45,7 @@ export interface TodayStatus {
   remaining: number
   closeAt: number | null
   nextResetAt: number
+  unlockedUntil: number | null
 }
 
 /** Состояние интеграции с CS2 — показывается на главной странице. */
@@ -66,4 +92,13 @@ export interface GamekeeperApi {
   getCs2Status(): Promise<Cs2Status>
   getRecentMatches(limit?: number): Promise<MatchRecord[]>
   getTodayStatus(): Promise<TodayStatus>
+  getProtectionState(): Promise<ProtectionState>
+  setInitialPassword(password: string): Promise<ActionResult>
+  changePassword(current: string, next: string): Promise<ActionResult>
+  /** password нужен только для увеличения лимита. */
+  setMatchLimit(value: number, password?: string): Promise<ActionResult>
+  setCloseDelay(seconds: number, password?: string): Promise<ActionResult>
+  requestUnlock(password: string): Promise<ActionResult>
+  requestQuit(password: string): Promise<ActionResult>
+  cancelPending(id: number): Promise<void>
 }

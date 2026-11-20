@@ -13,6 +13,8 @@ export interface RulesInput {
   closeDelayMs: number
   /** Время окончания каток за текущий игровой день, по возрастанию. */
   matchTimesToday: Date[]
+  /** Блокировка снята до этого момента (после подтверждённого запроса). null — не снята. */
+  unlockedUntil?: Date | null
 }
 
 export interface RulesState {
@@ -24,6 +26,8 @@ export interface RulesState {
   closeAt: Date | null
   dayStartedAt: Date
   nextResetAt: Date
+  /** Блокировка снята вручную (через пароль) — до какого момента. null — не снята. */
+  unlockedUntil: Date | null
 }
 
 /**
@@ -33,6 +37,9 @@ export interface RulesState {
 export function evaluateRules(input: RulesInput): RulesState {
   const { now, limit, closeDelayMs, matchTimesToday } = input
   const matchesToday = matchTimesToday.length
+  // Устаревшую отметку (из прошлого) не учитываем вовсе.
+  const unlockedUntil =
+    input.unlockedUntil && now < input.unlockedUntil ? input.unlockedUntil : null
 
   const base = {
     matchesToday,
@@ -40,10 +47,12 @@ export function evaluateRules(input: RulesInput): RulesState {
     // Math.max(0, ...) — если лимит ужесточили ниже уже сыгранного, остаток не уходит в минус.
     remaining: Math.max(0, limit - matchesToday),
     dayStartedAt: getGameDayStart(now),
-    nextResetAt: getNextReset(now)
+    nextResetAt: getNextReset(now),
+    unlockedUntil
   }
 
-  if (matchesToday < limit) {
+  // Снятая блокировка разрешает играть сверх лимита до unlockedUntil.
+  if (matchesToday < limit || unlockedUntil !== null) {
     return { ...base, status: 'allowed', closeAt: null }
   }
 

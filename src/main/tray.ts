@@ -18,8 +18,8 @@ export function createTray(actions: TrayActions): Tray {
     Menu.buildFromTemplate([
       { label: 'Открыть Gamekeeper', click: actions.onShow },
       { type: 'separator' },
-      // TODO (этап 5): выход только по паролю + задержка 10 минут.
-      { label: 'Выход', click: actions.onQuit }
+      // Выход — только по паролю через 10 минут; пункт открывает окно с запросом.
+      { label: 'Выход…', click: actions.onQuit }
     ])
   )
 

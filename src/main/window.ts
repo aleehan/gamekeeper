@@ -42,6 +42,12 @@ export function createMainWindow(options: { showOnReady: boolean }): BrowserWind
     }
   })
 
+  // Выключение / выход из Windows: не мешаем системе завершить работу,
+  // иначе перехват 'close' выше заблокировал бы выключение компьютера.
+  win.on('session-end', () => {
+    isQuitting = true
+  })
+
   // Внешние ссылки открываем в браузере, а не внутри приложения.
   win.webContents.setWindowOpenHandler((details) => {
     shell.openExternal(details.url)

@@ -19,7 +19,7 @@
     "build:mac": "electron-vite build && electron-builder --mac",
     "build:linux": "electron-vite build && electron-builder --linux",
     "db:generate": "drizzle-kit generate",
-    "test": "vitest run"
+    "test": "node scripts/vitest-electron.mjs"
   },
   "dependencies": {
     "@electron-toolkit/utils": "^4.0.0",

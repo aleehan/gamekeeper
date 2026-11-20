@@ -24,7 +24,8 @@ function rules(status: RulesStatus): RulesState {
     remaining: 0,
     closeAt: null,
     dayStartedAt: new Date(),
-    nextResetAt: new Date()
+    nextResetAt: new Date(),
+    unlockedUntil: null
   }
 }
 

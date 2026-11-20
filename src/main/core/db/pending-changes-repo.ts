@@ -48,6 +48,15 @@ export function listDueChanges(db: Db, now: Date): PendingChange[] {
     .all()
 }
 
+/** Отменяет все ожидающие изменения данного вида. Возвращает число отменённых. */
+export function cancelPendingOfKind(db: Db, kind: PendingChangeKind): number {
+  return db
+    .update(pendingChanges)
+    .set({ status: 'cancelled' })
+    .where(and(eq(pendingChanges.status, 'pending'), eq(pendingChanges.kind, kind)))
+    .run().changes
+}
+
 export function setChangeStatus(db: Db, id: number, status: PendingChangeStatus): void {
   db.update(pendingChanges).set({ status }).where(eq(pendingChanges.id, id)).run()
 }
