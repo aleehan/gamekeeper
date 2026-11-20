@@ -5,24 +5,31 @@ import { app } from 'electron'
 export const HIDDEN_FLAG = '--hidden'
 
 /**
- * Включает автозапуск с Windows (запись в HKCU\...\Run).
+ * Имя записи в HKCU\Software\Microsoft\Windows\CurrentVersion\Run.
+ * Задано явно, потому что деинсталлятор (build/installer.nsh) удаляет запись по этому имени.
+ */
+export const AUTOSTART_NAME = 'Gamekeeper'
+
+// Одни и те же параметры для установки и проверки: по ним Electron находит «свою» запись.
+const LOGIN_ITEM = { name: AUTOSTART_NAME, args: [HIDDEN_FLAG] }
+
+/**
+ * Включает автозапуск с Windows. Вызывается при каждом старте, поэтому
+ * запись восстанавливается, даже если её удалили вручную.
  *
  * В режиме разработки (`npm run dev`) ничего не делаем: там исполняемый файл —
  * это голый electron.exe из node_modules, и прописывать его в автозагрузку нельзя.
  */
 export function ensureAutostart(): void {
   if (!app.isPackaged) return
-
-  app.setLoginItemSettings({
-    openAtLogin: true,
-    args: [HIDDEN_FLAG]
-  })
+  app.setLoginItemSettings({ ...LOGIN_ITEM, openAtLogin: true })
 }
 
 export function isAutostartEnabled(): boolean {
-  // На Windows getLoginItemSettings нужно передать те же args, что и при установке,
-  // иначе Electron не узнает «свою» запись в реестре.
-  return app.getLoginItemSettings({ args: [HIDDEN_FLAG] }).openAtLogin
+  // openAtLogin здесь не годится: Electron на Windows читает аргументы из записи как пустой
+  // список и, сравнив их с ['--hidden'], всегда отвечает false. executableWillLaunchAtLogin —
+  // «запись для этого exe есть и не отключена в диспетчере задач», это нам и нужно.
+  return app.getLoginItemSettings(LOGIN_ITEM).executableWillLaunchAtLogin
 }
 
 // `process.argv` — массив строк аргументов запуска. `includes` вернёт boolean.

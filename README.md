@@ -1,34 +1,24 @@
-# gamekeeper
+# Gamekeeper
 
-An Electron application with React and TypeScript
+Десктопное приложение для Windows 11: считает соревновательные катки в CS2 и закрывает игру, когда дневной лимит исчерпан. Счётчик сбрасывается каждый день в 05:00.
 
-## Recommended IDE Setup
+- Катки считаются через CS2 Game State Integration — конфиг ставится в игру автоматически.
+- Засчитываются соревновательный режим, Premier и напарники, только матчи, которые ты играл сам.
+- После последней катки — уведомление и закрытие `cs2.exe`. До 05:00 игра закрывается при каждом запуске. Посреди матча, начатого до ужесточения лимита, игру не закрывает.
+- Автозапуск с Windows, работа из трея. Уменьшить лимит можно сразу; увеличить лимит, снять блокировку или выйти — только по паролю и через 10 минут.
 
-- [VSCode](https://code.visualstudio.com/) + [ESLint](https://marketplace.visualstudio.com/items?itemName=dbaeumer.vscode-eslint) + [Prettier](https://marketplace.visualstudio.com/items?itemName=esbenp.prettier-vscode)
+## Установка
 
-## Project Setup
+Скачай `Gamekeeper-<версия>-setup.exe` и запусти. Установщик не подписан, поэтому Windows SmartScreen покажет предупреждение: «Подробнее» → «Выполнить в любом случае». После установки перезапусти CS2, чтобы она подхватила конфиг.
 
-### Install
-
-```bash
-$ npm install
-```
-
-### Development
+## Разработка
 
 ```bash
-$ npm run dev
+npm install          # зависимости + пересборка better-sqlite3 под Electron
+npm run dev          # запуск в режиме разработки
+npm test             # тесты (Vitest внутри Electron)
+npm run typecheck    # проверка типов
+npm run build:win    # установщик в dist/
 ```
 
-### Build
-
-```bash
-# For windows
-$ npm run build:win
-
-# For macOS
-$ npm run build:mac
-
-# For Linux
-$ npm run build:linux
-```
+Стек: Electron, React, TypeScript (electron-vite), Drizzle ORM + SQLite (better-sqlite3), electron-builder. Архитектура и правила проекта — в [CLAUDE.md](CLAUDE.md).

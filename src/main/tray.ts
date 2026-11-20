@@ -1,5 +1,7 @@
 import { Menu, Tray, nativeImage } from 'electron'
-import icon from '../../resources/icon.png?asset'
+// ?asset — electron-vite подставит путь к файлу в папке resources (она не упаковывается в asar).
+// Рядом лежит tray@2x.png: Electron сам возьмёт его на экранах с масштабом 200%.
+import trayIcon from '../../resources/tray.png?asset'
 
 // Описываем, что трею нужно от внешнего мира, через интерфейс колбэков.
 // Так tray.ts не знает про окно напрямую — его можно переиспользовать и тестировать.
@@ -9,9 +11,9 @@ export interface TrayActions {
 }
 
 export function createTray(actions: TrayActions): Tray {
-  // Иконка трея на Windows — 16x16; большую картинку уменьшаем.
-  const image = nativeImage.createFromPath(icon).resize({ width: 16, height: 16 })
-  const tray = new Tray(image)
+  // Отдельная картинка 16×16 (и 32×32 для @2x), нарисованная под маленький размер:
+  // уменьшенная иконка приложения в трее превращается в кашу.
+  const tray = new Tray(nativeImage.createFromPath(trayIcon))
 
   tray.setToolTip('Gamekeeper')
   tray.setContextMenu(

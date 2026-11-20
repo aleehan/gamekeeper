@@ -16,10 +16,9 @@
     "postinstall": "install-electron && electron-builder install-app-deps",
     "build:unpack": "npm run build && electron-builder --dir",
     "build:win": "npm run build && electron-builder --win",
-    "build:mac": "electron-vite build && electron-builder --mac",
-    "build:linux": "electron-vite build && electron-builder --linux",
     "db:generate": "drizzle-kit generate",
-    "test": "node scripts/vitest-electron.mjs"
+    "test": "node scripts/vitest-electron.mjs",
+    "icons": "electron scripts/icons/render.mjs"
   },
   "dependencies": {
     "@electron-toolkit/utils": "^4.0.0",

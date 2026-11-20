@@ -77,14 +77,15 @@ src/
 6. ✅ UI: Главная, Настройки, История; IPC через window.gamekeeper.
    - ✅ Рабочие экраны с простой вёрсткой (+ экран первого запуска, обновления по событию `state:changed`).
    - ✅ Дизайн через /unslop по направлению «Судья и счёт»: шрифты IBM Plex Sans/Mono (@fontsource, офлайн), иконки lucide-react, токены в `src/renderer/src/assets/main.css`. Засечки — компонент `Tally`, жёлтая карточка — `YellowCard`.
-7. Сборка установщика electron-builder.
+7. ✅ Сборка установщика electron-builder.
 
 ## Команды
 
 - `npm run dev` — запуск в режиме разработки
 - `npm run typecheck` — проверка типов
 - `npm test` — юнит-тесты (Vitest). Тесты лежат рядом с кодом: `*.test.ts`. Vitest запускается внутри Electron в режиме Node (`scripts/vitest-electron.mjs`), поэтому тесты могут использовать better-sqlite3 (база `':memory:'` + миграции из `drizzle/`). Модуль `electron` в тестах недоступен — тестируем только `core/`.
-- `npm run build:win` — сборка установщика
+- `npm run build:win` — установщик NSIS в `dist/` (`npm run build:unpack` — распакованная версия для проверки)
+- `npm run icons` — перерисовать иконки из `scripts/icons/*.svg`
 - `npm run db:generate` — сгенерировать SQL-миграцию после изменения `src/main/core/db/schema.ts`
 
 ## База данных
@@ -99,3 +100,10 @@ src/
 - Конфиг `gamestate_integration_gamekeeper.cfg` ставится при каждом старте приложения, если содержимое отличается. CS2 читает cfg только при своём запуске — после установки игру нужно перезапустить.
 - Засчитывание катки — `MatchCounter` (`core/match-counter.ts`): переход фазы в `gameover` из известной фазы + соревновательный режим + за матч хотя бы раз `player.steamid === provider.steamid` с командой CT/T. Проверять SteamID только в момент gameover нельзя: мёртвый игрок наблюдает за тиммейтом.
 - Ручная проверка без игры: POST JSON на сервер с токеном из базы (см. формат в `gsi-payload.ts`).
+
+## Сборка
+
+- Иконки: `scripts/icons/icon.svg` → `build/icon.png` (из него electron-builder делает .ico) и `resources/icon.png`; `tray.svg` → `resources/tray.png` + `tray@2x.png`.
+- Установщик per-user (без прав админа), не подписан. `build/installer.nsh` при удалении стирает запись автозапуска `HKCU\...\Run\Gamekeeper`.
+- Автозапуск: запись `Gamekeeper` с флагом `--hidden`. Проверять через `executableWillLaunchAtLogin` — `openAtLogin` на Windows всегда false из-за сравнения args.
+- Распакованная сборка из `dist/win-unpacked` при запуске регистрирует автозапуск на свой путь — после проверки удалить: `reg delete HKCU\Software\Microsoft\Windows\CurrentVersion\Run /v Gamekeeper /f`.
