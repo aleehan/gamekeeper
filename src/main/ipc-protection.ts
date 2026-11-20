@@ -27,6 +27,7 @@ export function registerProtectionIpc(
         id: c.id,
         kind: c.kind,
         value: c.value,
+        faceitNickname: c.kind === 'change_faceit' ? faceitNicknameFromJson(c.textValue) : null,
         applyAt: c.applyAfter.getTime()
       }))
     }
@@ -73,4 +74,20 @@ export function registerProtectionIpc(
       if (isNumber(id)) protection.cancel(id)
     })
   )
+}
+
+/** Только никнейм из JSON отложенной смены FACEIT — ключ в интерфейс не отдаём. */
+function faceitNicknameFromJson(json: string | null): string | null {
+  if (!json) return null
+  try {
+    const value: unknown = JSON.parse(json)
+    return typeof value === 'object' &&
+      value !== null &&
+      'nickname' in value &&
+      typeof value.nickname === 'string'
+      ? value.nickname
+      : null
+  } catch {
+    return null
+  }
 }

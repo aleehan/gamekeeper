@@ -21,6 +21,13 @@ import {
 import { getNextReset } from './game-day'
 import { hashPassword, MIN_PASSWORD_LENGTH, verifyPassword } from './password'
 
+/** Аккаунт FACEIT, как он хранится в настройках. */
+export interface FaceitAccount {
+  nickname: string
+  playerId: string
+  apiKey: string
+}
+
 export interface ProtectionOptions {
   db: Db
   delayMs?: number
@@ -125,6 +132,23 @@ export class ProtectionService {
     return this.requestLoosening('quit', null, password)
   }
 
+  /**
+   * Подключение FACEIT. Первое подключение — сразу (катки начинают считаться и из API,
+   * это ужесточение). Смена аккаунта/ключа и отключение (account = null) — ослабление:
+   * по паролю и через задержку, иначе можно подставить чужой ник и перестать считать свои матчи.
+   * Аккаунт уже проверен через API вызывающим кодом (core не ходит в сеть сам по себе).
+   */
+  async setFaceitAccount(account: FaceitAccount | null, password?: string): Promise<ActionResult> {
+    const current = getSettings(this.db)
+    const connected = current.faceitPlayerId !== null
+    if (!connected && account === null) return fail('unchanged')
+    if (!connected && account !== null) {
+      applyFaceitAccount(this.db, account)
+      return { ok: true, applied: 'now' }
+    }
+    return this.requestLoosening('change_faceit', null, password, JSON.stringify(account))
+  }
+
   /** Отмена ожидающего изменения — это ужесточение, пароль не нужен. */
   cancel(id: number): void {
     const change = listPendingChanges(this.db).find((c) => c.id === id)
@@ -167,6 +191,9 @@ export class ProtectionService {
           break
         case 'quit':
           break // в базе менять нечего
+        case 'change_faceit':
+          applyFaceitAccount(this.db, parseFaceitAccount(change.textValue))
+          break
       }
       setChangeStatus(this.db, change.id, 'applied')
     }
@@ -176,7 +203,8 @@ export class ProtectionService {
   private async requestLoosening(
     kind: PendingChangeKind,
     value: number | null,
-    password: string | undefined
+    password: string | undefined,
+    textValue: string | null = null
   ): Promise<ActionResult> {
     const check = await this.checkPassword(password)
     if (check) return check
@@ -186,6 +214,7 @@ export class ProtectionService {
     const change = requestChange(this.db, {
       kind,
       value,
+      textValue,
       requestedAt: this.now(),
       delayMs: this.delayMs
     })
@@ -199,4 +228,36 @@ export class ProtectionService {
     if (!password || !(await verifyPassword(password, hash))) return fail('wrong-password')
     return null
   }
+}
+
+function applyFaceitAccount(db: Db, account: FaceitAccount | null): void {
+  updateSettings(db, {
+    faceitNickname: account?.nickname ?? null,
+    faceitPlayerId: account?.playerId ?? null,
+    faceitApiKey: account?.apiKey ?? null,
+    faceitSyncedAt: null
+  })
+}
+
+/** JSON из pending_changes.text_value → аккаунт (или null = отключить). */
+function parseFaceitAccount(json: string | null): FaceitAccount | null {
+  if (!json) return null
+  try {
+    const value: unknown = JSON.parse(json)
+    if (
+      typeof value === 'object' &&
+      value !== null &&
+      'nickname' in value &&
+      'playerId' in value &&
+      'apiKey' in value &&
+      typeof value.nickname === 'string' &&
+      typeof value.playerId === 'string' &&
+      typeof value.apiKey === 'string'
+    ) {
+      return { nickname: value.nickname, playerId: value.playerId, apiKey: value.apiKey }
+    }
+  } catch {
+    // битый JSON — считаем отключением
+  }
+  return null
 }

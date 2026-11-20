@@ -10,6 +10,7 @@ import {
 export interface RequestChangeInput {
   kind: PendingChangeKind
   value?: number | null
+  textValue?: string | null
   requestedAt: Date
   delayMs: number
 }
@@ -20,6 +21,7 @@ export function requestChange(db: Db, input: RequestChangeInput): PendingChange 
     .values({
       kind: input.kind,
       value: input.value ?? null,
+      textValue: input.textValue ?? null,
       requestedAt: input.requestedAt,
       // Date хранит время в миллисекундах; getTime() + задержка = момент применения.
       applyAfter: new Date(input.requestedAt.getTime() + input.delayMs)

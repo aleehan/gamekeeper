@@ -24,6 +24,12 @@ const api = {
   requestUnlock: (password: string) => ipcRenderer.invoke(IpcChannels.requestUnlock, password),
   requestQuit: (password: string) => ipcRenderer.invoke(IpcChannels.requestQuit, password),
   cancelPending: (id: number) => ipcRenderer.invoke(IpcChannels.cancelPending, id),
+  getFaceitState: () => ipcRenderer.invoke(IpcChannels.getFaceitState),
+  connectFaceit: (nickname: string, apiKey: string, password?: string) =>
+    ipcRenderer.invoke(IpcChannels.connectFaceit, nickname, apiKey, password),
+  disconnectFaceit: (password: string) =>
+    ipcRenderer.invoke(IpcChannels.disconnectFaceit, password),
+  syncFaceit: () => ipcRenderer.invoke(IpcChannels.syncFaceit),
   onStateChanged: (listener: () => void) => {
     // Оборачиваем слушатель, чтобы странице не утекал объект события IPC.
     const handler = (): void => listener()

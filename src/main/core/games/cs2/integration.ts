@@ -3,6 +3,7 @@ import type { Cs2Status } from '../../../../shared/ipc'
 import { getSettings, insertMatch, updateSettings, type Db, type Match } from '../../db'
 import { GsiServer } from '../../gsi-server'
 import { MatchCounter } from '../../match-counter'
+import { ownScoreFromSides } from '../../match-result'
 import { installGsiConfig } from './gsi-config'
 import type { GsiPayload } from './gsi-payload'
 import { findCs2Install, findSteamPath } from './steam-locator'
@@ -19,6 +20,8 @@ const GSI_STALE_MS = 65_000 // _ в числе — просто разделит
 export interface Cs2IntegrationOptions {
   db: Db
   port?: number
+  /** false — не трогать cfg в папке CS2 (профиль разработки рядом с установленной версией). */
+  installConfig?: boolean
   /** Вызывается после записи засчитанной катки в базу. */
   onMatchRecorded?: (match: Match) => void
   /** Любое изменение статуса (новое сообщение GSI, завершён запуск). */
@@ -65,7 +68,10 @@ export class Cs2Integration {
       this.status.steamPath = steamPath
       this.status.gamePath = install?.gamePath ?? null
 
-      if (install) {
+      if (install && this.options.installConfig === false) {
+        this.status.config = 'unchanged'
+        this.log('GSI cfg не трогаем (профиль разработки)')
+      } else if (install) {
         this.status.config = await installGsiConfig(install.cfgPath, {
           port: this.status.port,
           token
@@ -134,7 +140,11 @@ export class Cs2Integration {
     this.status.inMatch = this.isInMatch()
 
     if (finished) {
-      const match = insertMatch(this.options.db, finished)
+      const match = insertMatch(this.options.db, {
+        ...finished,
+        source: 'gsi',
+        ...ownScoreFromSides(finished.playerTeam, finished.ctScore, finished.tScore)
+      })
       this.log(`Катка засчитана: ${match.map} (${match.mode}) ${match.ctScore}:${match.tScore}`)
       this.options.onMatchRecorded?.(match)
     }

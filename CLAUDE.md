@@ -107,3 +107,14 @@ src/
 - Установщик per-user (без прав админа), не подписан. `build/installer.nsh` при удалении стирает запись автозапуска `HKCU\...\Run\Gamekeeper`.
 - Автозапуск: запись `Gamekeeper` с флагом `--hidden`. Проверять через `executableWillLaunchAtLogin` — `openAtLogin` на Windows всегда false из-за сравнения args.
 - Распакованная сборка из `dist/win-unpacked` при запуске регистрирует автозапуск на свой путь — после проверки удалить: `reg delete HKCU\Software\Microsoft\Windows\CurrentVersion\Run /v Gamekeeper /f`.
+## FACEIT
+
+- Матчи FACEIT засчитываются в лимит и показываются в истории. Два источника: GSI (сразу на экране итогов, если CS2 сообщает соревновательный режим — для FACEIT это не проверено) и FACEIT Data API (`core/faceit/`). Синхронизация: при старте, раз в 3 мин, через 1 и 2.5 мин после каждой GSI-катки, после подключения аккаунта.
+- Склейка: FACEIT-матч + GSI-катка на той же карте в пределах ±10 мин = одна запись (`faceit_match_id` дописывается к GSI-записи). Иначе новая запись `source='faceit'`, она идёт в лимит.
+- API (сверено с живыми ответами, `scripts/faceit-probe.mjs`): `Authorization: Bearer <key>`; `/players?nickname=`; `/players/{id}/history?game=cs2` — время в секундах, команды `faction1/faction2`, `results.winner` и `results.score` (раунды); карта и K/D — только в `/matches/{id}/stats` (`rounds[0].round_stats.Map`, `player_stats.Kills/Deaths` строками). Неверный ключ → `400 {"error":"invalid_token"}`.
+- Аккаунт FACEIT: первое подключение — сразу; смена/отключение — ослабление (`change_faceit`, пароль + 10 мин). Ключ хранится в `settings.faceit_api_key` локально и в интерфейс не отдаётся.
+- `.faceit-key` (в .gitignore) — ключ только для скрипта разведки.
+
+## Разработка рядом с установленной версией
+
+`GAMEKEEPER_PROFILE=test npm run dev` (в cmd: `set GAMEKEEPER_PROFILE=test&& npm run dev`) — отдельная папка данных `%APPDATA%\gamekeeper-test` (своя база и single-instance lock), GSI на порту 47816, конфиг CS2 не трогается, cs2.exe не закрывается. Без этого dev-запуск конфликтует с установленным Gamekeeper (общая база, замок, порт и токен в cfg). Установленный экземпляр не закрывать — это защита пользователя.

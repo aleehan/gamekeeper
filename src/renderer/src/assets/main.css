@@ -586,11 +586,32 @@ input.input {
 }
 
 .matches .col-map {
-  width: 32%;
+  width: 24%;
+}
+
+.matches .col-result {
+  width: 104px;
 }
 
 .matches .col-score {
-  width: 96px;
+  width: 72px;
+}
+
+.matches .col-kd {
+  width: 72px;
+}
+
+/* Итог матча — смысловые цвета, приглушённые палитрой. */
+.result-win {
+  color: var(--positive);
+}
+
+.result-loss {
+  color: var(--negative);
+}
+
+.result-draw {
+  color: var(--text-secondary);
 }
 
 .matches th {
@@ -689,4 +710,18 @@ input.input {
   gap: 24px;
   width: 100%;
   max-width: 400px;
+}
+
+.form-note {
+  margin-top: 16px;
+}
+
+a {
+  color: var(--text);
+  text-decoration-color: var(--hairline-strong);
+  text-underline-offset: 3px;
+}
+
+a:hover {
+  text-decoration-color: var(--text-secondary);
 }

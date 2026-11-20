@@ -20,6 +20,10 @@ export const IpcChannels = {
   requestUnlock: 'protection:request-unlock',
   requestQuit: 'protection:request-quit',
   cancelPending: 'protection:cancel',
+  getFaceitState: 'faceit:get-state',
+  connectFaceit: 'faceit:connect',
+  disconnectFaceit: 'faceit:disconnect',
+  syncFaceit: 'faceit:sync',
   /** Событие main → renderer: «что-то изменилось, перечитай данные». */
   stateChanged: 'state:changed'
 } as const
@@ -27,8 +31,10 @@ export const IpcChannels = {
 /** Ожидающее ослабление в том виде, в каком его показывает интерфейс. */
 export interface PendingChangeInfo {
   id: number
-  kind: 'raise_limit' | 'raise_close_delay' | 'unlock' | 'quit'
+  kind: 'raise_limit' | 'raise_close_delay' | 'unlock' | 'quit' | 'change_faceit'
   value: number | null
+  /** Для change_faceit — новый никнейм (null = отключение). Ключ в интерфейс не передаётся. */
+  faceitNickname: string | null
   applyAt: number
 }
 
@@ -78,6 +84,23 @@ export interface MatchRecord {
   tScore: number | null
   /** Игровой день (начинается в 05:00), к которому относится катка: начало дня в мс. */
   gameDay: number
+  /** Матч сыгран на FACEIT (пришёл из API или GSI-катка, подтверждённая FACEIT). */
+  faceit: boolean
+  ownScore: number | null
+  oppScore: number | null
+  result: 'win' | 'loss' | 'draw' | null
+  kills: number | null
+  deaths: number | null
+}
+
+/** Подключение FACEIT для страницы настроек. */
+export interface FaceitState {
+  connected: boolean
+  nickname: string | null
+  /** Последняя успешная синхронизация, мс. */
+  syncedAt: number | null
+  syncing: boolean
+  lastError: 'bad-key' | 'not-found' | 'rate-limited' | 'network' | 'unexpected' | null
 }
 
 // `interface` описывает форму объекта. Здесь — то, что main вернёт в renderer.
@@ -106,6 +129,11 @@ export interface GamekeeperApi {
   requestUnlock(password: string): Promise<ActionResult>
   requestQuit(password: string): Promise<ActionResult>
   cancelPending(id: number): Promise<void>
+  getFaceitState(): Promise<FaceitState>
+  /** Проверяет ник и ключ через FACEIT API. Первое подключение — сразу, смена — по паролю через 10 минут. */
+  connectFaceit(nickname: string, apiKey: string, password?: string): Promise<ActionResult>
+  disconnectFaceit(password: string): Promise<ActionResult>
+  syncFaceit(): Promise<void>
   /**
    * Подписка на изменения состояния. Возвращает функцию отписки —
    * её удобно вернуть из useEffect как «уборку».

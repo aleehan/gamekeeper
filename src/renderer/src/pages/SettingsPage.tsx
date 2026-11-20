@@ -5,7 +5,9 @@ import { PageHeader } from '../components/PageHeader'
 import { PendingList } from '../components/PendingList'
 import { useAction } from '../hooks/useAction'
 import type { AppData } from '../hooks/useAppData'
-import { CONFIG_TEXT, SERVER_TEXT } from '../lib/labels'
+import type { FaceitState } from '../../../shared/ipc'
+import { formatDateTime } from '../lib/format'
+import { CONFIG_TEXT, FACEIT_ERROR_TEXT, SERVER_TEXT } from '../lib/labels'
 
 interface SettingsPageProps {
   data: AppData
@@ -39,6 +41,8 @@ export function SettingsPage({ data, reload }: SettingsPageProps): React.JSX.Ele
           reload={reload}
         />
       </section>
+
+      <FaceitSection state={data.faceit} reload={reload} />
 
       <PendingList
         items={protection.pending}
@@ -297,6 +301,154 @@ function QuitSection({ reload }: { reload: () => Promise<void> }): React.JSX.Ele
           Запросить выход
         </button>
       </div>
+      <Feedback value={feedback} />
+    </section>
+  )
+}
+
+function FaceitSection({
+  state,
+  reload
+}: {
+  state: FaceitState
+  reload: () => Promise<void>
+}): React.JSX.Element {
+  const [nickname, setNickname] = useState('')
+  const [apiKey, setApiKey] = useState('')
+  const [password, setPassword] = useState('')
+  const [editing, setEditing] = useState(false)
+  const { feedback, busy, run } = useAction()
+
+  async function connect(): Promise<void> {
+    const result = await run(() =>
+      window.gamekeeper.connectFaceit(nickname, apiKey, state.connected ? password : undefined)
+    )
+    if (result.ok) {
+      setApiKey('')
+      setPassword('')
+      setEditing(false)
+    }
+    await reload()
+  }
+
+  async function disconnect(): Promise<void> {
+    const result = await run(() => window.gamekeeper.disconnectFaceit(password))
+    if (result.ok) setPassword('')
+    await reload()
+  }
+
+  const form = (
+    <div className="stack">
+      <input
+        className="input"
+        placeholder="Никнейм на FACEIT"
+        aria-label="Никнейм на FACEIT"
+        value={nickname}
+        onChange={(e) => setNickname(e.target.value)}
+      />
+      <input
+        className="input"
+        type="password"
+        placeholder="API-ключ"
+        aria-label="API-ключ FACEIT"
+        value={apiKey}
+        onChange={(e) => setApiKey(e.target.value)}
+      />
+      {state.connected && (
+        <input
+          className="input"
+          type="password"
+          placeholder="Пароль Gamekeeper"
+          aria-label="Пароль Gamekeeper"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+        />
+      )}
+    </div>
+  )
+
+  return (
+    <section className="card">
+      <h2>FACEIT</h2>
+      {state.connected ? (
+        <>
+          <p className="status-line">
+            <span
+              className={`dot ${state.lastError ? 'negative' : 'positive'}`}
+              aria-hidden="true"
+            />
+            {state.nickname}
+          </p>
+          <p className="secondary">
+            {state.syncing
+              ? 'Обновляется'
+              : state.lastError
+                ? FACEIT_ERROR_TEXT[state.lastError]
+                : state.syncedAt
+                  ? `Обновлено ${formatDateTime(state.syncedAt)}. Матчи FACEIT засчитываются в лимит и видны в истории.`
+                  : 'Ещё не обновлялось'}
+          </p>
+          <div className="actions">
+            <button
+              className="button"
+              disabled={state.syncing}
+              onClick={() => void window.gamekeeper.syncFaceit().then(reload)}
+            >
+              Обновить сейчас
+            </button>
+            {!editing && (
+              <button className="button" onClick={() => setEditing(true)}>
+                Сменить или отключить
+              </button>
+            )}
+          </div>
+          {editing && (
+            <>
+              <p className="secondary small form-note">
+                Смена аккаунта и отключение вступают в силу через 10 минут после пароля.
+              </p>
+              {form}
+              <div className="actions">
+                <button
+                  className="button primary"
+                  disabled={busy || !nickname || !apiKey || !password}
+                  onClick={() => void connect()}
+                >
+                  Сменить аккаунт
+                </button>
+                <button
+                  className="button"
+                  disabled={busy || !password}
+                  onClick={() => void disconnect()}
+                >
+                  Отключить FACEIT
+                </button>
+              </div>
+            </>
+          )}
+        </>
+      ) : (
+        <>
+          <p className="secondary">
+            Матчи FACEIT будут засчитываться в лимит и появятся в истории с итогом, счётом и K–D.
+            Нужен API-ключ: создай приложение в{' '}
+            <a href="https://developers.faceit.com" target="_blank" rel="noreferrer">
+              developers.faceit.com
+            </a>{' '}
+            и ключ типа Server side.
+          </p>
+          <div className="form-note">{form}</div>
+          <div className="actions">
+            <button
+              className="button primary"
+              disabled={busy || !nickname || !apiKey}
+              onClick={() => void connect()}
+            >
+              Подключить
+            </button>
+          </div>
+        </>
+      )}
       <Feedback value={feedback} />
     </section>
   )

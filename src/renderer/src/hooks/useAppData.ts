@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import type {
   AppInfo,
   Cs2Status,
+  FaceitState,
   MatchRecord,
   ProtectionState,
   TodayStatus
@@ -14,19 +15,21 @@ export interface AppData {
   cs2: Cs2Status
   protection: ProtectionState
   matches: MatchRecord[]
+  faceit: FaceitState
 }
 
 async function fetchAll(): Promise<AppData> {
   const api = window.gamekeeper
   // Деструктуризация результата Promise.all: порядок совпадает с порядком запросов.
-  const [info, today, cs2, protection, matches] = await Promise.all([
+  const [info, today, cs2, protection, matches, faceit] = await Promise.all([
     api.getAppInfo(),
     api.getTodayStatus(),
     api.getCs2Status(),
     api.getProtectionState(),
-    api.getRecentMatches(200)
+    api.getRecentMatches(200),
+    api.getFaceitState()
   ])
-  return { info, today, cs2, protection, matches }
+  return { info, today, cs2, protection, matches, faceit }
 }
 
 /**

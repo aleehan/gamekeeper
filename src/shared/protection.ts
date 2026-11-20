@@ -14,6 +14,10 @@ export type ProtectionError =
   | 'password-too-short'
   | 'invalid-value'
   | 'unchanged'
+  // Ошибки проверки аккаунта FACEIT при подключении:
+  | 'faceit-bad-key'
+  | 'faceit-not-found'
+  | 'faceit-unavailable'
 
 /**
  * Результат действия. Это «размеченное объединение» по полю ok:

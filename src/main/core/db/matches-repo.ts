@@ -1,4 +1,4 @@
-import { asc, count, desc, gte } from 'drizzle-orm'
+import { and, asc, between, count, desc, eq, gte, isNull } from 'drizzle-orm'
 import type { Db } from './database'
 import { matches, type Match, type NewMatch } from './schema'
 
@@ -15,6 +15,36 @@ export function countMatchesSince(db: Db, since: Date): number {
     .get()
   // `??` — «если слева null/undefined, взять справа».
   return row?.value ?? 0
+}
+
+export function findMatchByFaceitId(db: Db, faceitMatchId: string): Match | undefined {
+  return db.select().from(matches).where(eq(matches.faceitMatchId, faceitMatchId)).get()
+}
+
+/**
+ * GSI-катка без привязки к FACEIT, закончившаяся в пределах ±windowMs от `around`.
+ * Нужна, чтобы не засчитать один и тот же FACEIT-матч дважды (GSI + API).
+ */
+export function findUnlinkedGsiMatchesNear(db: Db, around: Date, windowMs: number): Match[] {
+  return db
+    .select()
+    .from(matches)
+    .where(
+      and(
+        eq(matches.source, 'gsi'),
+        isNull(matches.faceitMatchId),
+        between(
+          matches.finishedAt,
+          new Date(around.getTime() - windowMs),
+          new Date(around.getTime() + windowMs)
+        )
+      )
+    )
+    .all()
+}
+
+export function updateMatch(db: Db, id: number, patch: Partial<NewMatch>): void {
+  db.update(matches).set(patch).where(eq(matches.id, id)).run()
 }
 
 /** Время окончания каток начиная с `since`, по возрастанию — вход для rules-engine. */

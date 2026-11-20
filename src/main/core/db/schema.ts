@@ -21,7 +21,13 @@ export const settings = sqliteTable(
     // Секретный токен, который CS2 присылает в каждом GSI-запросе (этап 3).
     gsiToken: text('gsi_token'),
     // До какого момента блокировка снята (после подтверждённого «Снять блокировку»).
-    unlockedUntil: integer('unlocked_until', { mode: 'timestamp_ms' })
+    unlockedUntil: integer('unlocked_until', { mode: 'timestamp_ms' }),
+    // FACEIT: никнейм, id игрока (из API) и ключ Data API. null — не подключено.
+    faceitNickname: text('faceit_nickname'),
+    faceitPlayerId: text('faceit_player_id'),
+    faceitApiKey: text('faceit_api_key'),
+    // Когда последний раз успешно сходили в FACEIT API.
+    faceitSyncedAt: integer('faceit_synced_at', { mode: 'timestamp_ms' })
   },
   // Третий аргумент — ограничения таблицы. `table` — уже описанные колонки.
   (table) => [
@@ -32,6 +38,11 @@ export const settings = sqliteTable(
 )
 
 // ── matches ───────────────────────────────────────────────────────────
+export const matchSources = ['gsi', 'faceit'] as const
+export type MatchSource = (typeof matchSources)[number]
+export const matchResults = ['win', 'loss', 'draw'] as const
+export type MatchResult = (typeof matchResults)[number]
+
 // Одна строка = одна засчитанная соревновательная катка.
 export const matches = sqliteTable(
   'matches',
@@ -45,7 +56,18 @@ export const matches = sqliteTable(
     map: text('map').notNull(),
     steamId: text('steam_id').notNull(),
     ctScore: integer('ct_score'),
-    tScore: integer('t_score')
+    tScore: integer('t_score'),
+    // Откуда запись: 'gsi' — засчитал GSI в момент окончания, 'faceit' — пришла из FACEIT API.
+    source: text('source', { enum: matchSources }).notNull().default('gsi'),
+    // Id матча на FACEIT. Есть и у GSI-записи, если FACEIT потом подтвердил, что это его матч.
+    faceitMatchId: text('faceit_match_id').unique(),
+    // Сторона игрока в конце матча ('CT' | 'T') — чтобы показать счёт «свой : соперника».
+    playerTeam: text('player_team'),
+    ownScore: integer('own_score'),
+    oppScore: integer('opp_score'),
+    result: text('result', { enum: matchResults }),
+    kills: integer('kills'),
+    deaths: integer('deaths')
   },
   // Индекс ускоряет главный запрос: «сколько каток с 05:00 сегодняшнего дня».
   (table) => [index('matches_finished_at_idx').on(table.finishedAt)]
@@ -57,7 +79,15 @@ export const matches = sqliteTable(
 
 // Список допустимых видов изменения. `as const` + `[number]` ниже дают
 // тип-объединение 'raise_limit' | 'unlock' | ... вместо просто string.
-export const pendingChangeKinds = ['raise_limit', 'raise_close_delay', 'unlock', 'quit'] as const
+export const pendingChangeKinds = [
+  'raise_limit',
+  'raise_close_delay',
+  'unlock',
+  'quit',
+  // Смена или отключение аккаунта FACEIT: иначе можно было бы подставить чужой ник
+  // и перестать засчитывать свои FACEIT-катки.
+  'change_faceit'
+] as const
 export type PendingChangeKind = (typeof pendingChangeKinds)[number]
 
 export const pendingChangeStatuses = ['pending', 'applied', 'cancelled'] as const
@@ -72,6 +102,8 @@ export const pendingChanges = sqliteTable(
     kind: text('kind', { enum: pendingChangeKinds }).notNull(),
     // Новое значение, например лимит 5. Для 'unlock'/'quit' — null.
     value: integer('value'),
+    // Текстовое значение (JSON) — для 'change_faceit'.
+    textValue: text('text_value'),
     requestedAt: integer('requested_at', { mode: 'timestamp_ms' }).notNull(),
     applyAfter: integer('apply_after', { mode: 'timestamp_ms' }).notNull(),
     status: text('status', { enum: pendingChangeStatuses }).notNull().default('pending')

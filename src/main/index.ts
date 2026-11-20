@@ -1,4 +1,5 @@
 import { app, ipcMain, BrowserWindow, Tray } from 'electron'
+import { join } from 'path'
 import { electronApp, optimizer } from '@electron-toolkit/utils'
 import { IpcChannels, type AppInfo, type MatchRecord, type TodayStatus } from '../shared/ipc'
 import { createMainWindow, markQuitting, showWindow } from './window'
@@ -8,17 +9,23 @@ import { getDatabasePath, getMigrationsFolder } from './paths'
 import { openDatabase, getSettings, listRecentMatches, type DatabaseHandle } from './core/db'
 import { Cs2Integration } from './core/games/cs2/integration'
 import { Enforcer } from './core/enforcer'
-import { WindowsProcessController } from './core/process-controller'
+import { WindowsProcessController, type ProcessController } from './core/process-controller'
 import { evaluateToday } from './core/today'
 import { getGameDayStart } from './core/game-day'
 import { notifyChangeApplied, notifyKilled, notifyMatchRecorded } from './notifications'
 import { ProtectionService } from './core/protection'
 import { registerProtectionIpc } from './ipc-protection'
+import { FaceitSync } from './core/faceit/sync'
+import { registerFaceitIpc } from './ipc-faceit'
 
 /** Как часто проверять, не пора ли применить отложенные изменения. */
 const APPLY_DUE_INTERVAL_MS = 5000
 /** Страховочное обновление окна (смена игрового дня, устаревание данных GSI). */
 const FALLBACK_REFRESH_MS = 30_000
+/** Плановая синхронизация с FACEIT. */
+const FACEIT_SYNC_INTERVAL_MS = 3 * 60_000
+/** После катки, засчитанной GSI, FACEIT выкладывает матч не сразу — проверяем дважды. */
+const FACEIT_AFTER_MATCH_DELAYS_MS = [60_000, 150_000]
 
 // Ссылки держим на уровне модуля: если Tray окажется только в локальной
 // переменной функции, сборщик мусора его удалит и иконка исчезнет из трея.
@@ -44,6 +51,22 @@ function broadcastStateChanged(): void {
       mainWindow.webContents.send(IpcChannels.stateChanged)
     }
   }, 250)
+}
+
+// ── Изолированный профиль разработки ──────────────────────────────────
+// GAMEKEEPER_PROFILE=test npm run dev — запуск рядом с установленным Gamekeeper:
+// своя папка данных (база и single-instance lock), свой порт GSI, конфиг CS2 не трогаем,
+// cs2.exe не закрываем. В собранном приложении переменная игнорируется.
+const devProfile = app.isPackaged ? undefined : process.env['GAMEKEEPER_PROFILE']
+if (devProfile) {
+  // Путь к userData нужно поменять ДО requestSingleInstanceLock: замок привязан к этой папке.
+  app.setPath('userData', join(app.getPath('appData'), `gamekeeper-${devProfile}`))
+}
+
+/** Контроллер-пустышка для профиля разработки: «процесс не запущен», убивать нечего. */
+const noopProcesses: ProcessController = {
+  isRunning: async () => false,
+  kill: async () => {}
 }
 
 // ── Single-instance lock ──────────────────────────────────────────────
@@ -82,15 +105,33 @@ function bootstrap(): void {
   })
   const db = database.db
 
+  // ── FACEIT ──────────────────────────────────────────────────────────
+  const faceitSync = new FaceitSync({ db, log: (message) => console.log(`[faceit] ${message}`) })
+
+  const runFaceitSync = async (): Promise<void> => {
+    const result = await faceitSync.sync()
+    // Новые матчи за текущий игровой день — это засчитанные катки: уведомить и проверить лимит.
+    const dayStart = getGameDayStart(new Date())
+    if (result.added.some((m) => m.finishedAt >= dayStart)) {
+      notifyMatchRecorded(evaluateToday(db))
+      void enforcer?.tick()
+    }
+    broadcastStateChanged()
+  }
+
   // Интеграция с CS2 стартует асинхронно (поиск Steam, запись cfg, запуск сервера).
   // `void` явно говорит: «результат Promise нам не нужен», ошибки она логирует сама.
   cs2 = new Cs2Integration({
     db,
+    ...(devProfile ? { port: 47816, installConfig: false } : {}),
     log: (message) => console.log(`[cs2] ${message}`),
     onMatchRecorded: () => {
       notifyMatchRecorded(evaluateToday(db))
       // Не ждём следующего тика: если лимит исчерпан, закрываем сразу.
       void enforcer?.tick()
+      // Если это был FACEIT-матч, через пару минут он появится в API — привяжем данные.
+      for (const delay of FACEIT_AFTER_MATCH_DELAYS_MS)
+        setTimeout(() => void runFaceitSync(), delay)
     },
     onStatusChanged: broadcastStateChanged
   })
@@ -100,7 +141,7 @@ function bootstrap(): void {
   // (модульная переменная cs2 теоретически могла бы стать null).
   const integration = cs2
   enforcer = new Enforcer({
-    processes: new WindowsProcessController(),
+    processes: devProfile ? noopProcesses : new WindowsProcessController(),
     getRules: () => evaluateToday(db),
     isInMatch: () => integration.isInMatch(),
     getMatchKey: () => integration.getMatchKey(),
@@ -129,6 +170,7 @@ function bootstrap(): void {
       broadcastStateChanged()
     }
     // `some` — есть ли хотя бы один элемент, подходящий под условие.
+    if (applied.some((c) => c.kind === 'change_faceit')) void runFaceitSync()
     if (applied.some((c) => c.kind === 'quit')) app.quit()
   }
   applyDueChanges()
@@ -139,7 +181,19 @@ function bootstrap(): void {
     void enforcer?.tick()
     broadcastStateChanged()
   })
+  registerFaceitIpc({
+    db,
+    protection,
+    sync: faceitSync,
+    runSync: runFaceitSync,
+    onChanged: () => {
+      void enforcer?.tick()
+      broadcastStateChanged()
+    }
+  })
   setInterval(broadcastStateChanged, FALLBACK_REFRESH_MS)
+  setTimeout(() => void runFaceitSync(), 5000)
+  setInterval(() => void runFaceitSync(), FACEIT_SYNC_INTERVAL_MS)
 
   // При автозапуске с флагом --hidden окно создаём, но не показываем.
   mainWindow = createMainWindow({ showOnReady: !wasLaunchedHidden() })
@@ -200,7 +254,13 @@ function registerIpc(db: DatabaseHandle['db'], cs2: Cs2Integration): void {
       map: m.map,
       ctScore: m.ctScore,
       tScore: m.tScore,
-      gameDay: getGameDayStart(m.finishedAt).getTime()
+      gameDay: getGameDayStart(m.finishedAt).getTime(),
+      faceit: m.faceitMatchId !== null,
+      ownScore: m.ownScore,
+      oppScore: m.oppScore,
+      result: m.result,
+      kills: m.kills,
+      deaths: m.deaths
     }))
   })
 }

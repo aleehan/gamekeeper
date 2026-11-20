@@ -3,7 +3,13 @@ import { PageHeader } from '../components/PageHeader'
 import { Tally } from '../components/Tally'
 import type { AppData } from '../hooks/useAppData'
 import { formatClock, formatDay, MATCH_FORMS, plural } from '../lib/format'
-import { modeText } from '../lib/labels'
+import { modeText, RESULT_TEXT } from '../lib/labels'
+
+/** Счёт «свой : соперника»; для старых записей без стороны игрока — CT:T. */
+function scoreText(m: MatchRecord): string {
+  if (m.ownScore !== null && m.oppScore !== null) return `${m.ownScore}:${m.oppScore}`
+  return `${m.ctScore ?? '–'}:${m.tScore ?? '–'}`
+}
 
 interface DayGroup {
   gameDay: number
@@ -41,7 +47,7 @@ export function HistoryPage({ data }: { data: AppData }): React.JSX.Element {
       {groups.length === 0 && (
         <section className="card">
           <p className="secondary">
-            Здесь появятся засчитанные катки: соревновательный режим, Premier и напарники.
+            Здесь появятся засчитанные катки: соревновательный режим, Premier, напарники и FACEIT.
           </p>
         </section>
       )}
@@ -64,15 +70,21 @@ export function HistoryPage({ data }: { data: AppData }): React.JSX.Element {
               <col className="col-time" />
               <col className="col-map" />
               <col />
+              <col className="col-result" />
               <col className="col-score" />
+              <col className="col-kd" />
             </colgroup>
             <thead>
               <tr>
                 <th scope="col">Время</th>
                 <th scope="col">Карта</th>
                 <th scope="col">Режим</th>
+                <th scope="col">Итог</th>
                 <th scope="col" className="num">
-                  Счёт CT:T
+                  Счёт
+                </th>
+                <th scope="col" className="num">
+                  K–D
                 </th>
               </tr>
             </thead>
@@ -81,9 +93,18 @@ export function HistoryPage({ data }: { data: AppData }): React.JSX.Element {
                 <tr key={m.id}>
                   <td className="mono muted">{formatClock(m.finishedAt)}</td>
                   <td>{m.map}</td>
-                  <td className="secondary">{modeText(m.mode)}</td>
-                  <td className="mono num">
-                    {m.ctScore ?? '–'}:{m.tScore ?? '–'}
+                  <td className="secondary">
+                    {/* FACEIT-матч, засчитанный через GSI, хранит режим из игры — помечаем отдельно. */}
+                    {m.faceit && m.mode !== 'faceit'
+                      ? `${modeText(m.mode)} · FACEIT`
+                      : modeText(m.mode)}
+                  </td>
+                  <td className={m.result ? `result-${m.result}` : 'muted'}>
+                    {m.result ? RESULT_TEXT[m.result] : '–'}
+                  </td>
+                  <td className="mono num">{scoreText(m)}</td>
+                  <td className="mono num muted">
+                    {m.kills !== null && m.deaths !== null ? `${m.kills}–${m.deaths}` : '–'}
                   </td>
                 </tr>
               ))}

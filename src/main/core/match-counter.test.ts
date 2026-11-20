@@ -127,6 +127,14 @@ describe('MatchCounter', () => {
     expect(counter.currentMatchKey).toBeNull()
   })
 
+  it('playerTeam — сторона игрока после смены сторон, а не в начале матча', () => {
+    const counter = new MatchCounter()
+    counter.update(payload({ phase: 'live', team: 'CT' }))
+    counter.update(payload({ phase: 'live', team: 'T' })) // вторая половина
+    counter.update(payload({ phase: 'live', player: TEAMMATE, team: 'T' })) // умер, смотрит тиммейта
+    expect(counter.update(payload({ phase: 'gameover', team: 'T' }))?.playerTeam).toBe('T')
+  })
+
   it('isInMatch: true в warmup/live/intermission, false в gameover и меню', () => {
     const counter = new MatchCounter()
     expect(counter.isInMatch()).toBe(false)

@@ -1,7 +1,7 @@
 // Все тексты, которые зависят от значений из main: статусы, ошибки, режимы.
 // Record<Тип, string> заставляет компилятор проверить, что подпись есть для КАЖДОГО значения.
 
-import type { Cs2Status, PendingChangeInfo, TodayStatus } from '../../../shared/ipc'
+import type { Cs2Status, FaceitState, PendingChangeInfo, TodayStatus } from '../../../shared/ipc'
 import type { ActionResult, ProtectionError } from '../../../shared/protection'
 
 export const TODAY_STATUS_TEXT: Record<TodayStatus['status'], string> = {
@@ -16,7 +16,10 @@ export const ERROR_TEXT: Record<ProtectionError, string> = {
   'wrong-password': 'Неверный пароль',
   'password-too-short': 'Пароль слишком короткий, нужно минимум 4 символа',
   'invalid-value': 'Недопустимое значение',
-  unchanged: 'Значение не изменилось'
+  unchanged: 'Значение не изменилось',
+  'faceit-bad-key': 'FACEIT не принял API-ключ',
+  'faceit-not-found': 'Игрок с таким ником на FACEIT не найден',
+  'faceit-unavailable': 'FACEIT сейчас недоступен, попробуй позже'
 }
 
 export function resultText(result: ActionResult): string {
@@ -38,6 +41,8 @@ export function describePending(change: PendingChangeInfo): string {
       return 'Снятие блокировки до 05:00'
     case 'quit':
       return 'Выход из Gamekeeper'
+    case 'change_faceit':
+      return change.faceitNickname ? `FACEIT → ${change.faceitNickname}` : 'Отключение FACEIT'
   }
 }
 
@@ -46,6 +51,7 @@ const MODE_TEXT: Record<string, string> = {
   premier: 'Premier',
   scrimcomp2v2: 'Напарники',
   casual: 'Обычный',
+  faceit: 'FACEIT',
   deathmatch: 'Бой насмерть'
 }
 
@@ -72,6 +78,20 @@ export function cs2ConnectionText(cs2: Cs2Status): string {
   return `CS2 подключена · ${cs2.mapName} · ${cs2.mode ? modeText(cs2.mode) : ''}${
     cs2.inMatch ? ' · идёт матч' : ''
   }`
+}
+
+export const RESULT_TEXT: Record<'win' | 'loss' | 'draw', string> = {
+  win: 'Победа',
+  loss: 'Поражение',
+  draw: 'Ничья'
+}
+
+export const FACEIT_ERROR_TEXT: Record<NonNullable<FaceitState['lastError']>, string> = {
+  'bad-key': 'FACEIT не принимает ключ — проверь его или подключи заново',
+  'not-found': 'FACEIT не нашёл игрока',
+  'rate-limited': 'FACEIT просит подождать, повторим позже',
+  network: 'Нет связи с FACEIT',
+  unexpected: 'FACEIT ответил неожиданно'
 }
 
 export const CONFIG_TEXT: Record<Cs2Status['config'], string> = {

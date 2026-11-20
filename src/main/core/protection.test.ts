@@ -133,6 +133,43 @@ describe('ProtectionService', () => {
   })
 })
 
+describe('FACEIT-аккаунт', () => {
+  const account = { nickname: '_aleehan', playerId: 'p1', apiKey: 'k1' }
+
+  it('первое подключение — сразу и без пароля', async () => {
+    expect(await service.setFaceitAccount(account)).toEqual({ ok: true, applied: 'now' })
+    expect(settings()).toMatchObject({ faceitNickname: '_aleehan', faceitPlayerId: 'p1' })
+  })
+
+  it('смена аккаунта — по паролю и через 10 минут', async () => {
+    await service.setFaceitAccount(account)
+    const other = { nickname: 'other', playerId: 'p2', apiKey: 'k2' }
+    expect(await service.setFaceitAccount(other)).toEqual({ ok: false, error: 'wrong-password' })
+    expect(await service.setFaceitAccount(other, 'secret')).toMatchObject({ applied: 'pending' })
+    expect(settings().faceitPlayerId).toBe('p1')
+
+    advance(10 * MINUTE)
+    expect(service.applyDue().map((c) => c.kind)).toEqual(['change_faceit'])
+    expect(settings()).toMatchObject({
+      faceitNickname: 'other',
+      faceitPlayerId: 'p2',
+      faceitApiKey: 'k2'
+    })
+  })
+
+  it('отключение — тоже ослабление', async () => {
+    await service.setFaceitAccount(account)
+    expect(await service.setFaceitAccount(null, 'secret')).toMatchObject({ applied: 'pending' })
+    advance(10 * MINUTE)
+    service.applyDue()
+    expect(settings()).toMatchObject({
+      faceitNickname: null,
+      faceitPlayerId: null,
+      faceitApiKey: null
+    })
+  })
+})
+
 describe('Первая настройка', () => {
   it('пароль и лимит выше стандартного применяются сразу', async () => {
     const fresh = openDatabase({

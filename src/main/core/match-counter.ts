@@ -23,6 +23,8 @@ export interface FinishedMatch {
   steamId: string
   ctScore: number | null
   tScore: number | null
+  /** Сторона игрока в последнем сообщении, где он играл сам (после смены сторон — новая). */
+  playerTeam: 'CT' | 'T' | null
 }
 
 /**
@@ -41,6 +43,7 @@ export class MatchCounter {
   private mapName: string | null = null
   private phase: MapPhase | null = null
   private selfPlayed = false
+  private selfTeam: 'CT' | 'T' | null = null
   /** Порядковый номер текущего матча; растёт при каждом новом матче. */
   private matchSeq = 0
 
@@ -71,7 +74,12 @@ export class MatchCounter {
       provider !== undefined &&
       player.steamid === provider.steamid &&
       (player.team === 'CT' || player.team === 'T')
-    if (isSelf) this.selfPlayed = true
+    if (isSelf) {
+      this.selfPlayed = true
+      // Внутри if TS уже знает, что team — 'CT' или 'T' (проверено в isSelf выше),
+      // но через переменную isSelf сужение не «протекает», поэтому уточняем явно.
+      this.selfTeam = player?.team === 'CT' ? 'CT' : 'T'
+    }
 
     const previousPhase = this.phase
     this.phase = map.phase
@@ -89,7 +97,8 @@ export class MatchCounter {
       map: map.name,
       steamId: provider.steamid,
       ctScore: map.ctScore,
-      tScore: map.tScore
+      tScore: map.tScore,
+      playerTeam: this.selfTeam
     }
   }
 
@@ -115,5 +124,6 @@ export class MatchCounter {
     this.mapName = null
     this.phase = null
     this.selfPlayed = false
+    this.selfTeam = null
   }
 }
