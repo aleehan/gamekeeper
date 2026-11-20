@@ -17,13 +17,15 @@ export function PendingList({ items, onCancel }: PendingListProps): React.JSX.El
 
   return (
     <section className="card">
-      <h3>Ожидают применения</h3>
-      <ul className="pending-list">
+      <h2>Ожидают применения</h2>
+      <ul className="rows">
         {items.map((change) => (
-          <li key={change.id}>
+          <li key={change.id} className="row-item">
             <span>{describePending(change)}</span>
-            <span className="muted">через {formatCountdown(change.applyAt - now)}</span>
-            <button onClick={() => onCancel(change.id)}>Отменить</button>
+            <span className="mono muted">{formatCountdown(change.applyAt - now)}</span>
+            <button className="button" onClick={() => onCancel(change.id)}>
+              Отменить
+            </button>
           </li>
         ))}
       </ul>

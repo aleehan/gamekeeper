@@ -11,19 +11,19 @@ export const TODAY_STATUS_TEXT: Record<TodayStatus['status'], string> = {
 }
 
 export const ERROR_TEXT: Record<ProtectionError, string> = {
-  'password-not-set': 'Сначала задай пароль.',
-  'password-already-set': 'Пароль уже задан.',
-  'wrong-password': 'Неверный пароль.',
-  'password-too-short': 'Пароль слишком короткий — минимум 4 символа.',
-  'invalid-value': 'Недопустимое значение.',
-  unchanged: 'Значение не изменилось.'
+  'password-not-set': 'Сначала задай пароль',
+  'password-already-set': 'Пароль уже задан',
+  'wrong-password': 'Неверный пароль',
+  'password-too-short': 'Пароль слишком короткий, нужно минимум 4 символа',
+  'invalid-value': 'Недопустимое значение',
+  unchanged: 'Значение не изменилось'
 }
 
 export function resultText(result: ActionResult): string {
   if (!result.ok) return ERROR_TEXT[result.error]
   return result.applied === 'now'
-    ? 'Сохранено.'
-    : 'Запрос принят. Изменение вступит в силу через 10 минут, до этого его можно отменить.'
+    ? 'Сохранено'
+    : 'Принято. Вступит в силу через 10 минут, до этого запрос можно отменить.'
 }
 
 export function describePending(change: PendingChangeInfo): string {
@@ -54,13 +54,21 @@ export function modeText(mode: string): string {
   return MODE_TEXT[mode] ?? mode
 }
 
+/** Состояние связи для точки-индикатора: есть сигнал, ждём, ошибка. */
+export function cs2Health(cs2: Cs2Status): 'positive' | 'waiting' | 'negative' {
+  if (cs2.server === 'error' || cs2.config === 'error' || cs2.config === 'cs2-not-found') {
+    return 'negative'
+  }
+  return cs2.lastPayloadAt === null ? 'waiting' : 'positive'
+}
+
 /** Одна строка о связи с CS2 для главной страницы. */
 export function cs2ConnectionText(cs2: Cs2Status): string {
   if (cs2.config === 'cs2-not-found') return 'CS2 не найдена на этом компьютере'
   if (cs2.server === 'error') return `Ошибка GSI-сервера: ${cs2.error ?? 'неизвестно'}`
   if (cs2.config === 'error') return `Не удалось установить конфиг: ${cs2.error ?? 'неизвестно'}`
-  if (cs2.lastPayloadAt === null) return 'Ждём CS2 — запусти игру'
-  if (!cs2.mapName) return 'CS2 подключена, в меню'
+  if (cs2.lastPayloadAt === null) return 'Ждём сигнала от CS2, запусти игру'
+  if (!cs2.mapName) return 'CS2 подключена, главное меню'
   return `CS2 подключена · ${cs2.mapName} · ${cs2.mode ? modeText(cs2.mode) : ''}${
     cs2.inMatch ? ' · идёт матч' : ''
   }`

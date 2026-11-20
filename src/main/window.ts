@@ -14,8 +14,12 @@ export function markQuitting(): void {
 
 export function createMainWindow(options: { showOnReady: boolean }): BrowserWindow {
   const win = new BrowserWindow({
-    width: 900,
-    height: 670,
+    // Пропорции настольного приложения: боковая панель 240 + содержимое.
+    width: 1080,
+    height: 720,
+    minWidth: 880,
+    minHeight: 600,
+    backgroundColor: '#141415', // цвет фона страницы — без белой вспышки при открытии
     show: false, // показываем сами в 'ready-to-show', чтобы не мигало белым
     autoHideMenuBar: true,
     icon,

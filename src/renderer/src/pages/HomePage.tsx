@@ -1,19 +1,24 @@
 import { useState } from 'react'
 import { Feedback } from '../components/Feedback'
+import { PageHeader } from '../components/PageHeader'
 import { PendingList } from '../components/PendingList'
+import { Tally } from '../components/Tally'
+import { YellowCard } from '../components/YellowCard'
 import { useAction } from '../hooks/useAction'
 import type { AppData } from '../hooks/useAppData'
-import { formatClock, formatDateTime, MATCH_FORMS, plural } from '../lib/format'
-import { cs2ConnectionText, modeText, TODAY_STATUS_TEXT } from '../lib/labels'
+import { formatClock, formatDateTime, formatDay, MATCH_FORMS, plural } from '../lib/format'
+import { cs2ConnectionText, cs2Health, modeText, TODAY_STATUS_TEXT } from '../lib/labels'
+
+const DAY_MS = 24 * 60 * 60 * 1000
 
 /** Пояснение под статусом. Отдельная функция читается проще, чем вложенные тернарники в JSX. */
 function subtitle(today: AppData['today']): string {
   if (today.unlockedUntil !== null) {
-    return `Блокировка снята — лимит не действует до ${formatClock(today.unlockedUntil)}`
+    return `Блокировка снята, лимит не действует до ${formatClock(today.unlockedUntil)}`
   }
   switch (today.status) {
     case 'allowed':
-      return `Осталось ${today.remaining} ${plural(today.remaining, MATCH_FORMS)} на сегодня`
+      return `Осталось ${today.remaining} ${plural(today.remaining, MATCH_FORMS)}, сброс в ${formatClock(today.nextResetAt)}`
     case 'grace':
       return today.closeAt ? `CS2 закроется в ${formatClock(today.closeAt)}` : 'CS2 скоро закроется'
     case 'blocked':
@@ -32,6 +37,7 @@ export function HomePage({ data, reload }: HomePageProps): React.JSX.Element {
   const { feedback, busy, run } = useAction()
 
   const unlockPending = protection.pending.some((c) => c.kind === 'unlock')
+  const limitReached = today.status !== 'allowed' && today.unlockedUntil === null
   const lastMatch = matches[0] // массив отсортирован: новые сверху
 
   async function requestUnlock(): Promise<void> {
@@ -42,29 +48,51 @@ export function HomePage({ data, reload }: HomePageProps): React.JSX.Element {
 
   return (
     <main className="page">
-      <section className={`card today status-${today.status}`}>
-        <p className="today-count">
-          {today.matchesToday} <span className="muted">из {today.limit}</span>
-        </p>
-        <p className="today-status">{TODAY_STATUS_TEXT[today.status]}</p>
-        <p className="muted">{subtitle(today)}</p>
+      {/* Дата игрового дня (начался в 05:00), а не календарная: ночью это ещё «вчера». */}
+      <PageHeader title="Сегодня" meta={formatDay(today.nextResetAt - DAY_MS)} />
+
+      <section className={`card scoreboard${limitReached ? ' reached' : ''}`}>
+        <div className="scoreboard-count">
+          <Tally
+            played={today.matchesToday}
+            limit={today.limit}
+            label={`${today.matchesToday} из ${today.limit} каток`}
+          />
+          <p className="figure">
+            {today.matchesToday}
+            <span className="figure-of">из {today.limit}</span>
+          </p>
+        </div>
+        <div className="scoreboard-status">
+          <p className="status-line">
+            <span className={`dot ${limitReached ? 'negative' : 'positive'}`} aria-hidden="true" />
+            {today.unlockedUntil !== null ? 'Можно играть' : TODAY_STATUS_TEXT[today.status]}
+          </p>
+          <p className="secondary">{subtitle(today)}</p>
+        </div>
+        {limitReached && <YellowCard />}
       </section>
 
-      {today.status !== 'allowed' && !unlockPending && (
-        <section className="card form">
-          <h3>Снять блокировку</h3>
-          <p className="muted small">
-            Разрешит играть без лимита до 05:00. Вступит в силу через 10 минут после подтверждения
-            паролем.
+      {limitReached && !unlockPending && (
+        <section className="card">
+          <h2>Снять блокировку</h2>
+          <p className="secondary">
+            Разрешит играть без лимита до 05:00. Вступит в силу через 10 минут после пароля.
           </p>
-          <div className="row">
+          <div className="inline-form">
             <input
+              className="input"
               type="password"
               placeholder="Пароль"
+              aria-label="Пароль"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
-            <button disabled={busy || !password} onClick={() => void requestUnlock()}>
+            <button
+              className="button"
+              disabled={busy || !password}
+              onClick={() => void requestUnlock()}
+            >
               Запросить
             </button>
           </div>
@@ -78,13 +106,23 @@ export function HomePage({ data, reload }: HomePageProps): React.JSX.Element {
       />
 
       <section className="card">
-        <h3>CS2</h3>
-        <p>{cs2ConnectionText(cs2)}</p>
+        <h2>CS2</h2>
+        <p className="status-line">
+          <span className={`dot ${cs2Health(cs2)}`} aria-hidden="true" />
+          {cs2ConnectionText(cs2)}
+        </p>
         {lastMatch && (
-          <p className="muted">
-            Последняя катка: {lastMatch.map}, {modeText(lastMatch.mode)}, {lastMatch.ctScore ?? '?'}
-            :{lastMatch.tScore ?? '?'} — {formatDateTime(lastMatch.finishedAt)}
-          </p>
+          <dl className="facts">
+            <dt>Последняя катка</dt>
+            <dd>
+              {lastMatch.map} · {modeText(lastMatch.mode)} ·{' '}
+              <span className="mono">
+                {lastMatch.ctScore ?? '–'}:{lastMatch.tScore ?? '–'}
+              </span>
+            </dd>
+            <dt>Закончилась</dt>
+            <dd>{formatDateTime(lastMatch.finishedAt)}</dd>
+          </dl>
         )}
       </section>
     </main>

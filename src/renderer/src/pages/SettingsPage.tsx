@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { MATCH_LIMIT_MAX, MATCH_LIMIT_MIN } from '../../../shared/protection'
 import { Feedback } from '../components/Feedback'
+import { LimitPicker } from '../components/LimitPicker'
+import { PageHeader } from '../components/PageHeader'
 import { PendingList } from '../components/PendingList'
 import { useAction } from '../hooks/useAction'
 import type { AppData } from '../hooks/useAppData'
@@ -11,15 +12,11 @@ interface SettingsPageProps {
   reload: () => Promise<void>
 }
 
-const LIMIT_OPTIONS = Array.from(
-  { length: MATCH_LIMIT_MAX - MATCH_LIMIT_MIN + 1 },
-  (_, i) => MATCH_LIMIT_MIN + i
-)
 const DELAY_OPTIONS = [0, 30, 60, 120, 300]
 
 function delayText(seconds: number): string {
-  if (seconds === 0) return 'сразу'
-  return seconds < 60 ? `через ${seconds} с` : `через ${seconds / 60} мин`
+  if (seconds === 0) return 'Сразу'
+  return seconds < 60 ? `Через ${seconds} с` : `Через ${seconds / 60} мин`
 }
 
 export function SettingsPage({ data, reload }: SettingsPageProps): React.JSX.Element {
@@ -27,53 +24,62 @@ export function SettingsPage({ data, reload }: SettingsPageProps): React.JSX.Ele
 
   return (
     <main className="page">
-      {/* key: когда значение в базе меняется, React пересоздаёт секцию,
-          и её внутреннее состояние (выбранное значение) берётся заново из current. */}
-      <LimitSection key={protection.matchLimit} current={protection.matchLimit} reload={reload} />
-      <DelaySection
-        key={protection.closeDelaySeconds}
-        current={protection.closeDelaySeconds}
-        reload={reload}
+      <PageHeader
+        title="Настройки"
+        meta="Ужесточить можно сразу, ослабить — по паролю и через 10 минут"
       />
+
+      <section className="card settings">
+        {/* key: когда значение в базе меняется, React пересоздаёт строку,
+            и её внутреннее состояние (выбранное значение) берётся заново из current. */}
+        <LimitRow key={protection.matchLimit} current={protection.matchLimit} reload={reload} />
+        <DelayRow
+          key={protection.closeDelaySeconds}
+          current={protection.closeDelaySeconds}
+          reload={reload}
+        />
+      </section>
+
       <PendingList
         items={protection.pending}
         onCancel={(id) => void window.gamekeeper.cancelPending(id).then(reload)}
       />
+
       <PasswordSection />
       <QuitSection reload={reload} />
 
       <section className="card">
-        <h3>Диагностика</h3>
-        <dl className="info">
+        <h2>Диагностика</h2>
+        <dl className="facts">
           <dt>CS2</dt>
-          <dd>{cs2.gamePath ?? 'не найдена'}</dd>
+          <dd className="mono small">{cs2.gamePath ?? 'не найдена'}</dd>
           <dt>GSI-конфиг</dt>
           <dd>{CONFIG_TEXT[cs2.config]}</dd>
           <dt>GSI-сервер</dt>
           <dd>
-            {SERVER_TEXT[cs2.server]}, порт {cs2.port}
+            {SERVER_TEXT[cs2.server]}, порт <span className="mono">{cs2.port}</span>
           </dd>
           {cs2.error && (
             <>
               <dt>Ошибка</dt>
-              <dd className="error">{cs2.error}</dd>
+              <dd className="negative">{cs2.error}</dd>
             </>
           )}
           <dt>Автозапуск</dt>
-          <dd>{info.autostartEnabled ? 'включён' : 'выключен (только в собранной версии)'}</dd>
+          <dd>
+            {info.autostartEnabled ? 'включён' : 'выключен, работает только в установленной версии'}
+          </dd>
           <dt>База данных</dt>
-          <dd className="small">{info.databasePath}</dd>
-          <dt>Версия</dt>
-          <dd>{info.version}</dd>
+          <dd className="mono small">{info.databasePath}</dd>
         </dl>
       </section>
     </main>
   )
 }
 
-// Ниже — секции страницы. Они не экспортируются: используются только здесь.
+// Ниже — части страницы. Они не экспортируются: используются только здесь.
 
-function LimitSection({
+function LimitRow({
   current,
   reload
 }: {
@@ -94,41 +100,43 @@ function LimitSection({
   }
 
   return (
-    <section className="card form">
-      <h3>Лимит каток в день</h3>
-      <div className="row">
-        <select value={value} onChange={(e) => setValue(Number(e.target.value))}>
-          {LIMIT_OPTIONS.map((n) => (
-            <option key={n} value={n}>
-              {n}
-            </option>
-          ))}
-        </select>
-        <span className="muted">сейчас: {current}</span>
+    <div className="setting">
+      <div className="setting-text">
+        <h2>Каток в день</h2>
+        <p className="secondary">
+          Сейчас {current}. Засчитываются соревновательный, Premier и напарники.
+        </p>
       </div>
-      {loosening && (
-        <input
-          type="password"
-          placeholder="Пароль — для увеличения лимита"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-        />
-      )}
-      <div className="row">
-        <button
-          disabled={busy || value === current || (loosening && !password)}
-          onClick={() => void save()}
-        >
-          {loosening ? 'Запросить увеличение' : 'Сохранить'}
-        </button>
-        {loosening && <span className="muted small">вступит в силу через 10 минут</span>}
+      <div className="setting-control">
+        <LimitPicker value={value} current={current} onChange={setValue} />
+        {value !== current && (
+          <div className="inline-form">
+            {loosening && (
+              <input
+                className="input"
+                type="password"
+                placeholder="Пароль"
+                aria-label="Пароль для увеличения лимита"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+            )}
+            <button
+              className="button primary"
+              disabled={busy || (loosening && !password)}
+              onClick={() => void save()}
+            >
+              {loosening ? `Увеличить до ${value} через 10 минут` : `Сохранить ${value}`}
+            </button>
+          </div>
+        )}
+        <Feedback value={feedback} />
       </div>
-      <Feedback value={feedback} />
-    </section>
+    </div>
   )
 }
 
-function DelaySection({
+function DelayRow({
   current,
   reload
 }: {
@@ -153,37 +161,48 @@ function DelaySection({
   }
 
   return (
-    <section className="card form">
-      <h3>Когда закрывать CS2 после последней катки</h3>
-      <div className="row">
-        <select value={value} onChange={(e) => setValue(Number(e.target.value))}>
+    <div className="setting">
+      <div className="setting-text">
+        <h2>Закрыть CS2 после последней катки</h2>
+        <p className="secondary">Если за это время начнётся новый матч, игра закроется сразу.</p>
+      </div>
+      <div className="setting-control">
+        <select
+          className="input"
+          aria-label="Когда закрыть CS2"
+          value={value}
+          onChange={(e) => setValue(Number(e.target.value))}
+        >
           {options.map((s) => (
             <option key={s} value={s}>
               {delayText(s)}
             </option>
           ))}
         </select>
-        <span className="muted">сейчас: {delayText(current)}</span>
+        {value !== current && (
+          <div className="inline-form">
+            {loosening && (
+              <input
+                className="input"
+                type="password"
+                placeholder="Пароль"
+                aria-label="Пароль для увеличения задержки"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+            )}
+            <button
+              className="button primary"
+              disabled={busy || (loosening && !password)}
+              onClick={() => void save()}
+            >
+              {loosening ? 'Изменить через 10 минут' : 'Сохранить'}
+            </button>
+          </div>
+        )}
+        <Feedback value={feedback} />
       </div>
-      <p className="muted small">Если за это время начнётся новый матч, игра закроется сразу.</p>
-      {loosening && (
-        <input
-          type="password"
-          placeholder="Пароль — для увеличения задержки"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-        />
-      )}
-      <div className="row">
-        <button
-          disabled={busy || value === current || (loosening && !password)}
-          onClick={() => void save()}
-        >
-          {loosening ? 'Запросить изменение' : 'Сохранить'}
-        </button>
-      </div>
-      <Feedback value={feedback} />
-    </section>
+    </div>
   )
 }
 
@@ -209,32 +228,40 @@ function PasswordSection(): React.JSX.Element {
   }
 
   return (
-    <section className="card form">
-      <h3>Сменить пароль</h3>
-      <input
-        type="password"
-        placeholder="Текущий пароль"
-        value={current}
-        onChange={(e) => setCurrent(e.target.value)}
-      />
-      <input
-        type="password"
-        placeholder="Новый пароль"
-        value={next}
-        onChange={(e) => setNext(e.target.value)}
-      />
-      <input
-        type="password"
-        placeholder="Новый пароль ещё раз"
-        value={confirm}
-        onChange={(e) => setConfirm(e.target.value)}
-      />
-      <div className="row">
-        <button disabled={busy || !current || !next} onClick={() => void save()}>
-          Сменить
+    <section className="card">
+      <h2>Пароль</h2>
+      <div className="stack">
+        <input
+          className="input"
+          type="password"
+          placeholder="Текущий пароль"
+          aria-label="Текущий пароль"
+          value={current}
+          onChange={(e) => setCurrent(e.target.value)}
+        />
+        <input
+          className="input"
+          type="password"
+          placeholder="Новый пароль"
+          aria-label="Новый пароль"
+          value={next}
+          onChange={(e) => setNext(e.target.value)}
+        />
+        <input
+          className="input"
+          type="password"
+          placeholder="Новый пароль ещё раз"
+          aria-label="Новый пароль ещё раз"
+          value={confirm}
+          onChange={(e) => setConfirm(e.target.value)}
+        />
+      </div>
+      <div className="actions">
+        <button className="button" disabled={busy || !current || !next} onClick={() => void save()}>
+          Сменить пароль
         </button>
       </div>
-      {mismatch && <p className="feedback error">Новые пароли не совпадают.</p>}
+      {mismatch && <p className="feedback negative">Новые пароли не совпадают</p>}
       <Feedback value={feedback} />
     </section>
   )
@@ -251,20 +278,22 @@ function QuitSection({ reload }: { reload: () => Promise<void> }): React.JSX.Ele
   }
 
   return (
-    <section className="card form">
-      <h3>Выйти из Gamekeeper</h3>
-      <p className="muted small">
-        Приложение закроется через 10 минут после подтверждения. Пока оно не запущено, ограничения
-        не действуют; при следующем входе в Windows оно запустится снова.
+    <section className="card">
+      <h2>Выйти из Gamekeeper</h2>
+      <p className="secondary">
+        Приложение закроется через 10 минут после пароля. Пока оно не запущено, лимит не действует.
+        При следующем входе в Windows оно запустится снова.
       </p>
-      <div className="row">
+      <div className="inline-form">
         <input
+          className="input"
           type="password"
           placeholder="Пароль"
+          aria-label="Пароль для выхода"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
         />
-        <button disabled={busy || !password} onClick={() => void quit()}>
+        <button className="button" disabled={busy || !password} onClick={() => void quit()}>
           Запросить выход
         </button>
       </div>
