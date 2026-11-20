@@ -1,12 +1,16 @@
 import { app, ipcMain, BrowserWindow, Tray } from 'electron'
 import { electronApp, optimizer } from '@electron-toolkit/utils'
-import { IpcChannels, type AppInfo, type MatchRecord } from '../shared/ipc'
+import { IpcChannels, type AppInfo, type MatchRecord, type TodayStatus } from '../shared/ipc'
 import { createMainWindow, markQuitting, showWindow } from './window'
 import { createTray } from './tray'
 import { ensureAutostart, isAutostartEnabled, wasLaunchedHidden } from './autostart'
 import { getDatabasePath, getMigrationsFolder } from './paths'
 import { openDatabase, getSettings, listRecentMatches, type DatabaseHandle } from './core/db'
 import { Cs2Integration } from './core/games/cs2/integration'
+import { Enforcer } from './core/enforcer'
+import { WindowsProcessController } from './core/process-controller'
+import { evaluateToday } from './core/today'
+import { notifyKilled, notifyMatchRecorded } from './notifications'
 
 // Ссылки держим на уровне модуля: если Tray окажется только в локальной
 // переменной функции, сборщик мусора его удалит и иконка исчезнет из трея.
@@ -15,6 +19,7 @@ let mainWindow: BrowserWindow | null = null
 let tray: Tray | null = null
 let database: DatabaseHandle | null = null
 let cs2: Cs2Integration | null = null
+let enforcer: Enforcer | null = null
 
 // ── Single-instance lock ──────────────────────────────────────────────
 // Первый экземпляр получает «замок». Второй получает false и сразу выходит,
@@ -56,9 +61,30 @@ function bootstrap(): void {
   // `void` явно говорит: «результат Promise нам не нужен», ошибки она логирует сама.
   cs2 = new Cs2Integration({
     db,
-    log: (message) => console.log(`[cs2] ${message}`)
+    log: (message) => console.log(`[cs2] ${message}`),
+    onMatchRecorded: () => {
+      notifyMatchRecorded(evaluateToday(db))
+      // Не ждём следующего тика: если лимит исчерпан, закрываем сразу.
+      void enforcer?.tick()
+    }
   })
   void cs2.start()
+
+  // Локальная константа: внутри стрелочных функций ниже TS точно знает, что это не null
+  // (модульная переменная cs2 теоретически могла бы стать null).
+  const integration = cs2
+  enforcer = new Enforcer({
+    processes: new WindowsProcessController(),
+    getRules: () => evaluateToday(db),
+    isInMatch: () => integration.isInMatch(),
+    getMatchKey: () => integration.getMatchKey(),
+    onKilled: (reason) => {
+      console.log(`[enforcer] cs2.exe закрыта: ${reason}`)
+      notifyKilled(reason, evaluateToday(db))
+    },
+    onError: (error) => console.error('[enforcer]', error)
+  })
+  enforcer.start()
 
   registerIpc(db, cs2)
 
@@ -89,6 +115,19 @@ function registerIpc(db: DatabaseHandle['db'], cs2: Cs2Integration): void {
 
   ipcMain.handle(IpcChannels.getCs2Status, () => cs2.getStatus())
 
+  ipcMain.handle(IpcChannels.getTodayStatus, (): TodayStatus => {
+    const rules = evaluateToday(db)
+    return {
+      status: rules.status,
+      matchesToday: rules.matchesToday,
+      limit: rules.limit,
+      remaining: rules.remaining,
+      // `?.` + `??`: если closeAt null — получим null, иначе число миллисекунд.
+      closeAt: rules.closeAt?.getTime() ?? null,
+      nextResetAt: rules.nextResetAt.getTime()
+    }
+  })
+
   // Параметры обработчика: первый — событие IPC (нам не нужно, поэтому `_event`),
   // дальше — аргументы, которые renderer передал в invoke.
   // Аргументы из renderer нельзя принимать на веру — тип в сигнатуре лишь обещание,
@@ -112,6 +151,7 @@ function registerIpc(db: DatabaseHandle['db'], cs2: Cs2Integration): void {
 app.on('before-quit', () => {
   markQuitting()
   tray?.destroy() // `?.` — вызвать, только если tray не null
+  enforcer?.stop()
   void cs2?.stop()
 })
 

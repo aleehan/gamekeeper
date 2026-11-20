@@ -10,7 +10,8 @@ import { IpcChannels, type GamekeeperApi } from '../shared/ipc'
 const api = {
   getAppInfo: () => ipcRenderer.invoke(IpcChannels.getAppInfo),
   getCs2Status: () => ipcRenderer.invoke(IpcChannels.getCs2Status),
-  getRecentMatches: (limit?: number) => ipcRenderer.invoke(IpcChannels.getRecentMatches, limit)
+  getRecentMatches: (limit?: number) => ipcRenderer.invoke(IpcChannels.getRecentMatches, limit),
+  getTodayStatus: () => ipcRenderer.invoke(IpcChannels.getTodayStatus)
 } satisfies GamekeeperApi
 
 contextBridge.exposeInMainWorld('gamekeeper', api)

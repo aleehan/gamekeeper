@@ -1,4 +1,4 @@
-import { count, desc, gte } from 'drizzle-orm'
+import { asc, count, desc, gte } from 'drizzle-orm'
 import type { Db } from './database'
 import { matches, type Match, type NewMatch } from './schema'
 
@@ -15,6 +15,17 @@ export function countMatchesSince(db: Db, since: Date): number {
     .get()
   // `??` — «если слева null/undefined, взять справа».
   return row?.value ?? 0
+}
+
+/** Время окончания каток начиная с `since`, по возрастанию — вход для rules-engine. */
+export function listMatchTimesSince(db: Db, since: Date): Date[] {
+  return db
+    .select({ finishedAt: matches.finishedAt })
+    .from(matches)
+    .where(gte(matches.finishedAt, since))
+    .orderBy(asc(matches.finishedAt))
+    .all()
+    .map((row) => row.finishedAt)
 }
 
 /** Последние катки для страницы «История», новые сверху. */

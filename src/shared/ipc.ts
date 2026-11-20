@@ -8,8 +8,19 @@
 export const IpcChannels = {
   getAppInfo: 'app:get-info',
   getCs2Status: 'cs2:get-status',
-  getRecentMatches: 'matches:get-recent'
+  getRecentMatches: 'matches:get-recent',
+  getTodayStatus: 'rules:get-today'
 } as const
+
+/** Состояние лимита на сегодня (даты — в мс, чтобы было проще передавать и форматировать). */
+export interface TodayStatus {
+  status: 'allowed' | 'grace' | 'blocked'
+  matchesToday: number
+  limit: number
+  remaining: number
+  closeAt: number | null
+  nextResetAt: number
+}
 
 /** Состояние интеграции с CS2 — показывается на главной странице. */
 export interface Cs2Status {
@@ -54,4 +65,5 @@ export interface GamekeeperApi {
   getAppInfo(): Promise<AppInfo>
   getCs2Status(): Promise<Cs2Status>
   getRecentMatches(limit?: number): Promise<MatchRecord[]>
+  getTodayStatus(): Promise<TodayStatus>
 }

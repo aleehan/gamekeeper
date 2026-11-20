@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { AppInfo, Cs2Status, MatchRecord } from '../../shared/ipc'
+import type { AppInfo, Cs2Status, MatchRecord, TodayStatus } from '../../shared/ipc'
 
 // Record<K, V> — объект, где ключи типа K, а значения типа V.
 // Здесь TS проверит, что для КАЖДОГО варианта config есть подпись: забудешь один — ошибка.
@@ -18,6 +18,16 @@ const SERVER_LABELS: Record<Cs2Status['server'], string> = {
   stopped: 'остановлен'
 }
 
+const TODAY_LABELS: Record<TodayStatus['status'], string> = {
+  allowed: 'можно играть',
+  grace: 'лимит исчерпан, CS2 скоро закроется',
+  blocked: 'лимит исчерпан, CS2 заблокирована'
+}
+
+function formatClock(ms: number): string {
+  return new Date(ms).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+}
+
 function formatTime(ms: number): string {
   return new Date(ms).toLocaleString('ru-RU')
 }
@@ -27,6 +37,7 @@ function App(): React.JSX.Element {
   const [info, setInfo] = useState<AppInfo | null>(null)
   const [cs2, setCs2] = useState<Cs2Status | null>(null)
   const [matches, setMatches] = useState<MatchRecord[]>([])
+  const [today, setToday] = useState<TodayStatus | null>(null)
 
   useEffect(() => {
     window.gamekeeper.getAppInfo().then(setInfo)
@@ -35,12 +46,14 @@ function App(): React.JSX.Element {
     // поэтому объявляем отдельную функцию и вызываем её.
     const refresh = async (): Promise<void> => {
       // Promise.all запускает оба запроса параллельно и ждёт оба.
-      const [status, recent] = await Promise.all([
+      const [status, recent, todayStatus] = await Promise.all([
         window.gamekeeper.getCs2Status(),
-        window.gamekeeper.getRecentMatches(5)
+        window.gamekeeper.getRecentMatches(5),
+        window.gamekeeper.getTodayStatus()
       ])
       setCs2(status)
       setMatches(recent)
+      setToday(todayStatus)
     }
 
     void refresh()
@@ -52,14 +65,25 @@ function App(): React.JSX.Element {
   return (
     <main className="app">
       <h1>Gamekeeper</h1>
-      <p className="subtitle">Этап 3: интеграция с CS2</p>
+      <p className="subtitle">Этап 4: лимит и блокировка</p>
 
-      {info && (
+      <h2>Сегодня</h2>
+      {today === null ? (
+        <p>Загрузка…</p>
+      ) : (
         <dl className="info">
-          <dt>Версия</dt>
-          <dd>{info.version}</dd>
-          <dt>Лимит каток</dt>
-          <dd>{info.matchLimit}</dd>
+          <dt>Сыграно</dt>
+          <dd className="big">
+            {today.matchesToday} из {today.limit}
+          </dd>
+          <dt>Статус</dt>
+          {/* className из шаблонной строки: класс зависит от статуса. */}
+          <dd className={`status-${today.status}`}>
+            {TODAY_LABELS[today.status]}
+            {today.status === 'grace' && today.closeAt && ` в ${formatClock(today.closeAt)}`}
+          </dd>
+          <dt>Сброс счётчика</dt>
+          <dd>{formatTime(today.nextResetAt)}</dd>
         </dl>
       )}
 
@@ -106,6 +130,8 @@ function App(): React.JSX.Element {
           ))}
         </ul>
       )}
+
+      {info && <p className="hint">Версия {info.version}</p>}
     </main>
   )
 }

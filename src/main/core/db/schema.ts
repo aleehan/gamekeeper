@@ -14,7 +14,8 @@ export const settings = sqliteTable(
     // Сколько каток в день разрешено (1–10).
     matchLimit: integer('match_limit').notNull().default(3),
     // Через сколько секунд после последней катки закрыть cs2.exe.
-    closeDelaySeconds: integer('close_delay_seconds').notNull().default(120),
+    // 0 — сразу на экране итогов (иначе за время ожидания можно найти ещё одну игру).
+    closeDelaySeconds: integer('close_delay_seconds').notNull().default(0),
     // Хеш пароля (этап 5). null — пароль ещё не задан.
     passwordHash: text('password_hash'),
     // Секретный токен, который CS2 присылает в каждом GSI-запросе (этап 3).

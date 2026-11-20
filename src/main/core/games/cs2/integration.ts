@@ -10,6 +10,12 @@ import { findCs2Install, findSteamPath } from './steam-locator'
 /** Порт GSI-сервера. Выбран из редко используемого диапазона. */
 export const DEFAULT_GSI_PORT = 47815
 
+/**
+ * Сколько данные GSI считаются свежими. CS2 шлёт heartbeat раз в 30 с;
+ * если сообщений нет дольше — игра закрыта или упала, и «идёт матч» верить нельзя.
+ */
+const GSI_STALE_MS = 65_000 // _ в числе — просто разделитель разрядов для читаемости
+
 export interface Cs2IntegrationOptions {
   db: Db
   port?: number
@@ -99,11 +105,17 @@ export class Cs2Integration {
   /** Копия статуса: снаружи не должны менять наш внутренний объект. */
   getStatus(): Cs2Status {
     // Spread `{ ...obj }` создаёт поверхностную копию объекта.
-    return { ...this.status }
+    return { ...this.status, inMatch: this.isInMatch() }
   }
 
-  isInMatch(): boolean {
-    return this.counter.isInMatch()
+  /** Идёт ли матч — только по свежим данным (см. GSI_STALE_MS). */
+  isInMatch(now: number = Date.now()): boolean {
+    const last = this.status.lastPayloadAt
+    return last !== null && now - last < GSI_STALE_MS && this.counter.isInMatch()
+  }
+
+  getMatchKey(): number | null {
+    return this.counter.currentMatchKey
   }
 
   private handlePayload(payload: GsiPayload): void {
@@ -116,7 +128,7 @@ export class Cs2Integration {
     this.status.mapName = payload.map?.name ?? null
     this.status.mode = payload.map?.mode ?? null
     this.status.phase = payload.map?.phase ?? null
-    this.status.inMatch = this.counter.isInMatch()
+    this.status.inMatch = this.isInMatch()
 
     if (finished) {
       const match = insertMatch(this.options.db, finished)

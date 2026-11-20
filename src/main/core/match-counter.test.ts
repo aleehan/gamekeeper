@@ -105,6 +105,28 @@ describe('MatchCounter', () => {
     expect(counter.update(payload({ phase: 'gameover' }))).not.toBeNull()
   })
 
+  it('новый матч на той же карте после gameover засчитывается отдельно', () => {
+    const counter = new MatchCounter()
+    counter.update(payload({ phase: 'live' }))
+    expect(counter.update(payload({ phase: 'gameover' }))).not.toBeNull()
+    const firstKey = counter.currentMatchKey
+    counter.update(payload({ phase: 'warmup' }))
+    expect(counter.currentMatchKey).not.toBe(firstKey)
+    counter.update(payload({ phase: 'live' }))
+    expect(counter.update(payload({ phase: 'gameover' }))).not.toBeNull()
+  })
+
+  it('currentMatchKey: null в меню, одинаковый в пределах матча', () => {
+    const counter = new MatchCounter()
+    expect(counter.currentMatchKey).toBeNull()
+    counter.update(payload({ phase: 'warmup' }))
+    const key = counter.currentMatchKey
+    counter.update(payload({ phase: 'live' }))
+    expect(counter.currentMatchKey).toBe(key)
+    counter.update(payload({ inMenu: true }))
+    expect(counter.currentMatchKey).toBeNull()
+  })
+
   it('isInMatch: true в warmup/live/intermission, false в gameover и меню', () => {
     const counter = new MatchCounter()
     expect(counter.isInMatch()).toBe(false)

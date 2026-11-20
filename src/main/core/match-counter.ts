@@ -41,6 +41,8 @@ export class MatchCounter {
   private mapName: string | null = null
   private phase: MapPhase | null = null
   private selfPlayed = false
+  /** Порядковый номер текущего матча; растёт при каждом новом матче. */
+  private matchSeq = 0
 
   /**
    * Обрабатывает очередное сообщение. Возвращает FinishedMatch, если катка
@@ -55,10 +57,13 @@ export class MatchCounter {
       return null
     }
 
-    // Сменилась карта — это новый матч; предыдущая фаза неизвестна.
-    if (map.name !== this.mapName) {
+    // Новый матч: сменилась карта, или после gameover снова началась игра на той же карте.
+    // При смене карты предыдущая фаза неизвестна (null).
+    const restartedAfterGameover = this.phase === 'gameover' && map.phase !== 'gameover'
+    if (map.name !== this.mapName || restartedAfterGameover) {
       this.reset()
       this.mapName = map.name
+      this.matchSeq++
     }
 
     const isSelf =
@@ -91,6 +96,14 @@ export class MatchCounter {
   /** Идёт ли сейчас матч (понадобится enforcer'у: посреди матча игру не закрываем). */
   isInMatch(): boolean {
     return this.phase !== null && IN_MATCH_PHASES.has(this.phase)
+  }
+
+  /**
+   * Ключ текущего матча (или null, если игрок в меню). Нужен enforcer'у,
+   * чтобы отличить «тот самый матч, который шёл при ужесточении лимита» от нового.
+   */
+  get currentMatchKey(): number | null {
+    return this.mapName === null ? null : this.matchSeq
   }
 
   get currentPhase(): MapPhase | null {
