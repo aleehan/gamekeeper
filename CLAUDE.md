@@ -51,7 +51,7 @@ src/
 
 1. ✅ Каркас electron-vite + React + TS, трей, сворачивание в трей, автозапуск, single-instance lock.
 2. ✅ БД: Drizzle + better-sqlite3, схема (settings, matches, pending_changes), миграции.
-3. CS2: поиск Steam/CS2, установка GSI cfg, GSI-сервер, match-counter.
+3. ✅ CS2: поиск Steam/CS2, установка GSI cfg, GSI-сервер, match-counter.
 4. Rules-engine + enforcer: лимит, блокировка, отложенное закрытие, сброс в 05:00.
 5. Защита: пароль (хеш), отложенные ослабляющие изменения с задержкой 10 мин.
 6. UI: Главная, Настройки, История; IPC через window.gamekeeper.
@@ -61,6 +61,7 @@ src/
 
 - `npm run dev` — запуск в режиме разработки
 - `npm run typecheck` — проверка типов
+- `npm test` — юнит-тесты (Vitest). Тесты лежат рядом с кодом: `*.test.ts`. Тестировать можно только модули без better-sqlite3 и electron.
 - `npm run build:win` — сборка установщика
 - `npm run db:generate` — сгенерировать SQL-миграцию после изменения `src/main/core/db/schema.ts`
 
@@ -69,3 +70,10 @@ src/
 - Файл: `%APPDATA%\gamekeeper\gamekeeper.db`. Миграции применяются автоматически при старте (`openDatabase`).
 - Миграции лежат в `drizzle/` и коммитятся; в сборку попадают через `extraResources`. Уже закоммиченные миграции не редактировать — только генерировать новые.
 - `better-sqlite3` — нативный модуль, собран под Electron (`electron-builder install-app-deps` в postinstall). Обычный Node его не загрузит; для скриптов использовать `ELECTRON_RUN_AS_NODE=1 electron script.js`.
+
+## CS2 / GSI
+
+- GSI-сервер: `127.0.0.1:47815` (`DEFAULT_GSI_PORT` в `core/games/cs2/integration.ts`). Токен генерируется один раз и хранится в `settings.gsi_token`.
+- Конфиг `gamestate_integration_gamekeeper.cfg` ставится при каждом старте приложения, если содержимое отличается. CS2 читает cfg только при своём запуске — после установки игру нужно перезапустить.
+- Засчитывание катки — `MatchCounter` (`core/match-counter.ts`): переход фазы в `gameover` из известной фазы + соревновательный режим + за матч хотя бы раз `player.steamid === provider.steamid` с командой CT/T. Проверять SteamID только в момент gameover нельзя: мёртвый игрок наблюдает за тиммейтом.
+- Ручная проверка без игры: POST JSON на сервер с токеном из базы (см. формат в `gsi-payload.ts`).

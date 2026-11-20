@@ -8,7 +8,9 @@ import { IpcChannels, type GamekeeperApi } from '../shared/ipc'
 // `satisfies GamekeeperApi` проверяет, что объект соответствует интерфейсу,
 // но сохраняет его точный тип. Забудешь метод или ошибёшься в типе — будет ошибка компиляции.
 const api = {
-  getAppInfo: () => ipcRenderer.invoke(IpcChannels.getAppInfo)
+  getAppInfo: () => ipcRenderer.invoke(IpcChannels.getAppInfo),
+  getCs2Status: () => ipcRenderer.invoke(IpcChannels.getCs2Status),
+  getRecentMatches: (limit?: number) => ipcRenderer.invoke(IpcChannels.getRecentMatches, limit)
 } satisfies GamekeeperApi
 
 contextBridge.exposeInMainWorld('gamekeeper', api)

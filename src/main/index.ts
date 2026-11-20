@@ -1,11 +1,12 @@
 import { app, ipcMain, BrowserWindow, Tray } from 'electron'
 import { electronApp, optimizer } from '@electron-toolkit/utils'
-import { IpcChannels, type AppInfo } from '../shared/ipc'
+import { IpcChannels, type AppInfo, type MatchRecord } from '../shared/ipc'
 import { createMainWindow, markQuitting, showWindow } from './window'
 import { createTray } from './tray'
 import { ensureAutostart, isAutostartEnabled, wasLaunchedHidden } from './autostart'
 import { getDatabasePath, getMigrationsFolder } from './paths'
-import { openDatabase, getSettings, type DatabaseHandle } from './core/db'
+import { openDatabase, getSettings, listRecentMatches, type DatabaseHandle } from './core/db'
+import { Cs2Integration } from './core/games/cs2/integration'
 
 // Ссылки держим на уровне модуля: если Tray окажется только в локальной
 // переменной функции, сборщик мусора его удалит и иконка исчезнет из трея.
@@ -13,6 +14,7 @@ import { openDatabase, getSettings, type DatabaseHandle } from './core/db'
 let mainWindow: BrowserWindow | null = null
 let tray: Tray | null = null
 let database: DatabaseHandle | null = null
+let cs2: Cs2Integration | null = null
 
 // ── Single-instance lock ──────────────────────────────────────────────
 // Первый экземпляр получает «замок». Второй получает false и сразу выходит,
@@ -50,7 +52,15 @@ function bootstrap(): void {
   })
   const db = database.db
 
-  registerIpc(db)
+  // Интеграция с CS2 стартует асинхронно (поиск Steam, запись cfg, запуск сервера).
+  // `void` явно говорит: «результат Promise нам не нужен», ошибки она логирует сама.
+  cs2 = new Cs2Integration({
+    db,
+    log: (message) => console.log(`[cs2] ${message}`)
+  })
+  void cs2.start()
+
+  registerIpc(db, cs2)
 
   // При автозапуске с флагом --hidden окно создаём, но не показываем.
   mainWindow = createMainWindow({ showOnReady: !wasLaunchedHidden() })
@@ -64,7 +74,7 @@ function bootstrap(): void {
 }
 
 // `DatabaseHandle['db']` — индексный доступ к типу: «тип поля db из DatabaseHandle».
-function registerIpc(db: DatabaseHandle['db']): void {
+function registerIpc(db: DatabaseHandle['db'], cs2: Cs2Integration): void {
   // ipcMain.handle отвечает на ipcRenderer.invoke из preload.
   // Возвращаемое значение автоматически становится Promise на той стороне.
   ipcMain.handle(IpcChannels.getAppInfo, (): AppInfo => {
@@ -76,12 +86,33 @@ function registerIpc(db: DatabaseHandle['db']): void {
       matchLimit: getSettings(db).matchLimit
     }
   })
+
+  ipcMain.handle(IpcChannels.getCs2Status, () => cs2.getStatus())
+
+  // Параметры обработчика: первый — событие IPC (нам не нужно, поэтому `_event`),
+  // дальше — аргументы, которые renderer передал в invoke.
+  // Аргументы из renderer нельзя принимать на веру — тип в сигнатуре лишь обещание,
+  // по IPC может прийти что угодно. Поэтому принимаем unknown и проверяем.
+  ipcMain.handle(IpcChannels.getRecentMatches, (_event, limit: unknown): MatchRecord[] => {
+    const safeLimit =
+      typeof limit === 'number' && Number.isInteger(limit) ? Math.min(Math.max(limit, 1), 500) : 100
+    // .map превращает каждую строку базы в объект для интерфейса.
+    return listRecentMatches(db, safeLimit).map((m) => ({
+      id: m.id,
+      finishedAt: m.finishedAt.getTime(),
+      mode: m.mode,
+      map: m.map,
+      ctScore: m.ctScore,
+      tScore: m.tScore
+    }))
+  })
 }
 
 // 'before-quit' срабатывает при app.quit() — разрешаем окну закрыться по-настоящему.
 app.on('before-quit', () => {
   markQuitting()
   tray?.destroy() // `?.` — вызвать, только если tray не null
+  void cs2?.stop()
 })
 
 // 'will-quit' — последний момент перед завершением: аккуратно закрываем базу,
