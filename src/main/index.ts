@@ -10,12 +10,15 @@ import { Cs2Integration } from './core/games/cs2/integration'
 import { Enforcer } from './core/enforcer'
 import { WindowsProcessController } from './core/process-controller'
 import { evaluateToday } from './core/today'
+import { getGameDayStart } from './core/game-day'
 import { notifyChangeApplied, notifyKilled, notifyMatchRecorded } from './notifications'
 import { ProtectionService } from './core/protection'
 import { registerProtectionIpc } from './ipc-protection'
 
 /** Как часто проверять, не пора ли применить отложенные изменения. */
 const APPLY_DUE_INTERVAL_MS = 5000
+/** Страховочное обновление окна (смена игрового дня, устаревание данных GSI). */
+const FALLBACK_REFRESH_MS = 30_000
 
 // Ссылки держим на уровне модуля: если Tray окажется только в локальной
 // переменной функции, сборщик мусора его удалит и иконка исчезнет из трея.
@@ -25,6 +28,23 @@ let tray: Tray | null = null
 let database: DatabaseHandle | null = null
 let cs2: Cs2Integration | null = null
 let enforcer: Enforcer | null = null
+let broadcastTimer: NodeJS.Timeout | null = null
+
+/**
+ * Сообщает окну «состояние изменилось, перечитай данные».
+ * Вызовы в пределах 250 мс склеиваются в один (debounce):
+ * CS2 шлёт сообщения часто, и без этого окно перегружалось бы запросами.
+ */
+function broadcastStateChanged(): void {
+  if (broadcastTimer) return
+  broadcastTimer = setTimeout(() => {
+    broadcastTimer = null
+    // isDestroyed: окно могло быть уничтожено при выходе.
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send(IpcChannels.stateChanged)
+    }
+  }, 250)
+}
 
 // ── Single-instance lock ──────────────────────────────────────────────
 // Первый экземпляр получает «замок». Второй получает false и сразу выходит,
@@ -71,7 +91,8 @@ function bootstrap(): void {
       notifyMatchRecorded(evaluateToday(db))
       // Не ждём следующего тика: если лимит исчерпан, закрываем сразу.
       void enforcer?.tick()
-    }
+    },
+    onStatusChanged: broadcastStateChanged
   })
   void cs2.start()
 
@@ -86,6 +107,7 @@ function bootstrap(): void {
     onKilled: (reason) => {
       console.log(`[enforcer] cs2.exe закрыта: ${reason}`)
       notifyKilled(reason, evaluateToday(db))
+      broadcastStateChanged()
     },
     onError: (error) => console.error('[enforcer]', error)
   })
@@ -102,7 +124,10 @@ function bootstrap(): void {
       notifyChangeApplied(change)
     }
     // Лимит/блокировка могли измениться — пусть enforcer пересчитает сразу.
-    if (applied.length > 0) void enforcer?.tick()
+    if (applied.length > 0) {
+      void enforcer?.tick()
+      broadcastStateChanged()
+    }
     // `some` — есть ли хотя бы один элемент, подходящий под условие.
     if (applied.some((c) => c.kind === 'quit')) app.quit()
   }
@@ -110,7 +135,11 @@ function bootstrap(): void {
   setInterval(applyDueChanges, APPLY_DUE_INTERVAL_MS)
 
   registerIpc(db, cs2)
-  registerProtectionIpc(db, protection, () => void enforcer?.tick())
+  registerProtectionIpc(db, protection, () => {
+    void enforcer?.tick()
+    broadcastStateChanged()
+  })
+  setInterval(broadcastStateChanged, FALLBACK_REFRESH_MS)
 
   // При автозапуске с флагом --hidden окно создаём, но не показываем.
   mainWindow = createMainWindow({ showOnReady: !wasLaunchedHidden() })
@@ -170,7 +199,8 @@ function registerIpc(db: DatabaseHandle['db'], cs2: Cs2Integration): void {
       mode: m.mode,
       map: m.map,
       ctScore: m.ctScore,
-      tScore: m.tScore
+      tScore: m.tScore,
+      gameDay: getGameDayStart(m.finishedAt).getTime()
     }))
   })
 }

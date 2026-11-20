@@ -32,37 +32,45 @@ export function registerProtectionIpc(
     }
   })
 
-  ipcMain.handle(IpcChannels.setInitialPassword, (_e, password: unknown) =>
-    isString(password) ? protection.setInitialPassword(password) : INVALID
-  )
+  // Обёртка: выполнить действие и сообщить об изменении (даже если оно не удалось — не страшно).
+  async function withChange<T>(action: () => Promise<T> | T): Promise<T> {
+    const result = await action()
+    onChanged()
+    return result
+  }
+
+  ipcMain.handle(IpcChannels.setInitialPassword, (_e, password: unknown, limit: unknown) => {
+    if (!isString(password) || (limit !== undefined && !isNumber(limit))) return INVALID
+    return withChange(() => protection.setInitialPassword(password, limit))
+  })
 
   ipcMain.handle(IpcChannels.changePassword, (_e, current: unknown, next: unknown) =>
     isString(current) && isString(next) ? protection.changePassword(current, next) : INVALID
   )
 
-  ipcMain.handle(IpcChannels.setMatchLimit, async (_e, value: unknown, password: unknown) => {
-    if (!isNumber(value)) return INVALID
-    const result = await protection.setMatchLimit(value, optionalString(password))
-    onChanged()
-    return result
-  })
+  ipcMain.handle(IpcChannels.setMatchLimit, (_e, value: unknown, password: unknown) =>
+    isNumber(value)
+      ? withChange(() => protection.setMatchLimit(value, optionalString(password)))
+      : INVALID
+  )
 
-  ipcMain.handle(IpcChannels.setCloseDelay, async (_e, seconds: unknown, password: unknown) => {
-    if (!isNumber(seconds)) return INVALID
-    const result = await protection.setCloseDelay(seconds, optionalString(password))
-    onChanged()
-    return result
-  })
+  ipcMain.handle(IpcChannels.setCloseDelay, (_e, seconds: unknown, password: unknown) =>
+    isNumber(seconds)
+      ? withChange(() => protection.setCloseDelay(seconds, optionalString(password)))
+      : INVALID
+  )
 
   ipcMain.handle(IpcChannels.requestUnlock, (_e, password: unknown) =>
-    protection.requestUnlock(optionalString(password))
+    withChange(() => protection.requestUnlock(optionalString(password)))
   )
 
   ipcMain.handle(IpcChannels.requestQuit, (_e, password: unknown) =>
-    protection.requestQuit(optionalString(password))
+    withChange(() => protection.requestQuit(optionalString(password)))
   )
 
-  ipcMain.handle(IpcChannels.cancelPending, (_e, id: unknown) => {
-    if (isNumber(id)) protection.cancel(id)
-  })
+  ipcMain.handle(IpcChannels.cancelPending, (_e, id: unknown) =>
+    withChange(() => {
+      if (isNumber(id)) protection.cancel(id)
+    })
+  )
 }

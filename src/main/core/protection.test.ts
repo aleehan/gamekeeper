@@ -133,6 +133,38 @@ describe('ProtectionService', () => {
   })
 })
 
+describe('Первая настройка', () => {
+  it('пароль и лимит выше стандартного применяются сразу', async () => {
+    const fresh = openDatabase({
+      filePath: ':memory:',
+      migrationsFolder: join(process.cwd(), 'drizzle')
+    })
+    const setup = new ProtectionService({ db: fresh.db })
+    expect(await setup.setInitialPassword('secret', 7)).toEqual({ ok: true, applied: 'now' })
+    expect(getSettings(fresh.db).matchLimit).toBe(7)
+    expect(await setup.setInitialPassword('again', 9)).toEqual({
+      ok: false,
+      error: 'password-already-set'
+    })
+    expect(getSettings(fresh.db).matchLimit).toBe(7)
+    fresh.close()
+  })
+
+  it('недопустимый лимит при первой настройке — отказ, пароль не сохраняется', async () => {
+    const fresh = openDatabase({
+      filePath: ':memory:',
+      migrationsFolder: join(process.cwd(), 'drizzle')
+    })
+    const setup = new ProtectionService({ db: fresh.db })
+    expect(await setup.setInitialPassword('secret', 11)).toEqual({
+      ok: false,
+      error: 'invalid-value'
+    })
+    expect(setup.hasPassword()).toBe(false)
+    fresh.close()
+  })
+})
+
 describe('ProtectionService без пароля', () => {
   it('ослабление невозможно, пока пароль не задан', async () => {
     const fresh = openDatabase({

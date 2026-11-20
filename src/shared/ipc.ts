@@ -19,7 +19,9 @@ export const IpcChannels = {
   setCloseDelay: 'settings:set-close-delay',
   requestUnlock: 'protection:request-unlock',
   requestQuit: 'protection:request-quit',
-  cancelPending: 'protection:cancel'
+  cancelPending: 'protection:cancel',
+  /** Событие main → renderer: «что-то изменилось, перечитай данные». */
+  stateChanged: 'state:changed'
 } as const
 
 /** Ожидающее ослабление в том виде, в каком его показывает интерфейс. */
@@ -74,6 +76,8 @@ export interface MatchRecord {
   map: string
   ctScore: number | null
   tScore: number | null
+  /** Игровой день (начинается в 05:00), к которому относится катка: начало дня в мс. */
+  gameDay: number
 }
 
 // `interface` описывает форму объекта. Здесь — то, что main вернёт в renderer.
@@ -93,7 +97,8 @@ export interface GamekeeperApi {
   getRecentMatches(limit?: number): Promise<MatchRecord[]>
   getTodayStatus(): Promise<TodayStatus>
   getProtectionState(): Promise<ProtectionState>
-  setInitialPassword(password: string): Promise<ActionResult>
+  /** Первая настройка: пароль и лимит (лимит применяется сразу). */
+  setInitialPassword(password: string, matchLimit?: number): Promise<ActionResult>
   changePassword(current: string, next: string): Promise<ActionResult>
   /** password нужен только для увеличения лимита. */
   setMatchLimit(value: number, password?: string): Promise<ActionResult>
@@ -101,4 +106,9 @@ export interface GamekeeperApi {
   requestUnlock(password: string): Promise<ActionResult>
   requestQuit(password: string): Promise<ActionResult>
   cancelPending(id: number): Promise<void>
+  /**
+   * Подписка на изменения состояния. Возвращает функцию отписки —
+   * её удобно вернуть из useEffect как «уборку».
+   */
+  onStateChanged(listener: () => void): () => void
 }

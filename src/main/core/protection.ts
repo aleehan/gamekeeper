@@ -52,11 +52,27 @@ export class ProtectionService {
     return getSettings(this.db).passwordHash !== null
   }
 
-  /** Первичная установка пароля. Если пароль уже есть — только через changePassword. */
-  async setInitialPassword(password: string): Promise<ActionResult> {
+  /**
+   * Первая настройка: пароль и (необязательно) лимит каток.
+   * Лимит здесь применяется сразу в любую сторону — пока пароля нет, защищать нечего.
+   * Если пароль уже есть — только через changePassword.
+   */
+  async setInitialPassword(password: string, matchLimit?: number): Promise<ActionResult> {
     if (this.hasPassword()) return fail('password-already-set')
     if (password.length < MIN_PASSWORD_LENGTH) return fail('password-too-short')
-    updateSettings(this.db, { passwordHash: await hashPassword(password) })
+    if (
+      matchLimit !== undefined &&
+      (!Number.isInteger(matchLimit) ||
+        matchLimit < MATCH_LIMIT_MIN ||
+        matchLimit > MATCH_LIMIT_MAX)
+    ) {
+      return fail('invalid-value')
+    }
+    updateSettings(this.db, {
+      passwordHash: await hashPassword(password),
+      // Spread с условием: поле matchLimit добавится, только если лимит передан.
+      ...(matchLimit !== undefined ? { matchLimit } : {})
+    })
     return { ok: true, applied: 'now' }
   }
 

@@ -21,6 +21,8 @@ export interface Cs2IntegrationOptions {
   port?: number
   /** Вызывается после записи засчитанной катки в базу. */
   onMatchRecorded?: (match: Match) => void
+  /** Любое изменение статуса (новое сообщение GSI, завершён запуск). */
+  onStatusChanged?: () => void
   log?: (message: string) => void
 }
 
@@ -95,6 +97,7 @@ export class Cs2Integration {
       this.status.error = errorMessage(error)
       this.log(`GSI-сервер не запустился: ${this.status.error}`)
     }
+    this.options.onStatusChanged?.()
   }
 
   async stop(): Promise<void> {
@@ -135,6 +138,7 @@ export class Cs2Integration {
       this.log(`Катка засчитана: ${match.map} (${match.mode}) ${match.ctScore}:${match.tScore}`)
       this.options.onMatchRecorded?.(match)
     }
+    this.options.onStatusChanged?.()
   }
 
   /** Берёт токен из настроек; при первом запуске генерирует и сохраняет. */

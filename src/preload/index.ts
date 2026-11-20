@@ -13,8 +13,8 @@ const api = {
   getRecentMatches: (limit?: number) => ipcRenderer.invoke(IpcChannels.getRecentMatches, limit),
   getTodayStatus: () => ipcRenderer.invoke(IpcChannels.getTodayStatus),
   getProtectionState: () => ipcRenderer.invoke(IpcChannels.getProtectionState),
-  setInitialPassword: (password: string) =>
-    ipcRenderer.invoke(IpcChannels.setInitialPassword, password),
+  setInitialPassword: (password: string, matchLimit?: number) =>
+    ipcRenderer.invoke(IpcChannels.setInitialPassword, password, matchLimit),
   changePassword: (current: string, next: string) =>
     ipcRenderer.invoke(IpcChannels.changePassword, current, next),
   setMatchLimit: (value: number, password?: string) =>
@@ -23,7 +23,15 @@ const api = {
     ipcRenderer.invoke(IpcChannels.setCloseDelay, seconds, password),
   requestUnlock: (password: string) => ipcRenderer.invoke(IpcChannels.requestUnlock, password),
   requestQuit: (password: string) => ipcRenderer.invoke(IpcChannels.requestQuit, password),
-  cancelPending: (id: number) => ipcRenderer.invoke(IpcChannels.cancelPending, id)
+  cancelPending: (id: number) => ipcRenderer.invoke(IpcChannels.cancelPending, id),
+  onStateChanged: (listener: () => void) => {
+    // Оборачиваем слушатель, чтобы странице не утекал объект события IPC.
+    const handler = (): void => listener()
+    ipcRenderer.on(IpcChannels.stateChanged, handler)
+    return () => {
+      ipcRenderer.removeListener(IpcChannels.stateChanged, handler)
+    }
+  }
 } satisfies GamekeeperApi
 
 contextBridge.exposeInMainWorld('gamekeeper', api)
